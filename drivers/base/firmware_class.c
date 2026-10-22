@@ -19,6 +19,7 @@
 #include <linux/workqueue.h>
 #include <linux/highmem.h>
 #include <linux/firmware.h>
+#include <linux/cred.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
 #include <linux/file.h>
@@ -370,9 +371,21 @@ static int fw_get_filesystem_firmware(struct device *device,
 {
 	int i;
 	int rc = -ENOENT;
+	struct cred *kcred;
+	const struct cred *old_cred = NULL;
 	char *path = __getname();
 	if (!path)
 		return false;
+
+	/*
+	 * Read firmware as the kernel, not as whichever task asked for it:
+	 * under Halium there is no ueventd, so a confined Ubuntu Touch app
+	 * opening a device (e.g. the camera starting venus) would otherwise
+	 * have its AppArmor profile deny the firmware file.
+	 */
+	kcred = prepare_kernel_cred(NULL);
+	if (kcred)
+		old_cred = override_creds(kcred);
 
 	for (i = 0; i < ARRAY_SIZE(fw_path); i++) {
 		struct file *file;
@@ -393,6 +406,10 @@ static int fw_get_filesystem_firmware(struct device *device,
 				path, rc);
 		else
 			break;
+	}
+	if (kcred) {
+		revert_creds(old_cred);
+		put_cred(kcred);
 	}
 	__putname(path);
 
