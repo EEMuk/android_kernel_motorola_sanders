@@ -304,7 +304,13 @@ static const char * const fw_path[] = {
 	"/lib/firmware/" UTS_RELEASE,
 	"/lib/firmware",
 	"/lib64/firmware",
-	"/lib/firmware/image"
+	"/lib/firmware/image",
+	/* Halium: Android ueventd is not around to serve these */
+	"/vendor/firmware",
+	"/vendor/firmware_mnt/image",
+	"/vendor/firmware/wlan/prima",
+	"/system/etc/firmware",
+	"/odm/firmware"
 };
 
 /*
