@@ -445,10 +445,34 @@ static void msm_ispif_clear_all_irq_status(struct ispif_device *ispif)
 		ispif->base + ISPIF_IRQ_GLOBAL_CLEAR_CMD_ADDR);
 }
 
+/*
+ * Wait for an ISPIF reset to complete. On sanders the ISPIF interrupt
+ * stops arriving after the first one (stale status keeps the edge-triggered
+ * line high), although RESET_DONE latches within microseconds. Poll for it
+ * as well as for the completion, instead of sleeping out a 500ms timeout on
+ * every camera (re)start.
+ */
+static int msm_ispif_wait_reset(struct ispif_device *ispif, int vfe)
+{
+	int i;
+
+	for (i = 0; i < 500; i++) {
+		if (try_wait_for_completion(&ispif->reset_complete[vfe]))
+			return 0;
+		if (msm_camera_io_r(ispif->base +
+				ISPIF_VFE_m_IRQ_STATUS_0(vfe)) & RESET_DONE_IRQ) {
+			atomic_set(&ispif->reset_trig[vfe], 0);
+			msm_ispif_clear_all_irq_status(ispif);
+			return 0;
+		}
+		usleep_range(500, 1000);
+	}
+	return -ETIMEDOUT;
+}
+
 static int msm_ispif_reset_hw(struct ispif_device *ispif)
 {
 	int rc = 0;
-	long timeout = 0;
 	struct clk *reset_clk1[ARRAY_SIZE(ispif_8626_reset_clk_info)];
 	ispif->clk_idx = 0;
 
@@ -487,62 +511,26 @@ static int msm_ispif_reset_hw(struct ispif_device *ispif)
 	 * first so the reset produces a fresh edge.
 	 */
 	msm_ispif_clear_all_irq_status(ispif);
-	atomic_set(&ispif->reset_trig[VFE0], 1);
+
 	/* initiate reset of ISPIF */
+	reinit_completion(&ispif->reset_complete[VFE0]);
+	atomic_set(&ispif->reset_trig[VFE0], 1);
 	msm_camera_io_w(ISPIF_RST_CMD_MASK,
 				ispif->base + ISPIF_RST_CMD_ADDR);
-
-	timeout = wait_for_completion_timeout(
-			&ispif->reset_complete[VFE0], msecs_to_jiffies(500));
-	CDBG("%s: VFE0 done\n", __func__);
-
-	if (timeout <= 0) {
-		/*
-		 * Bring-up diagnostics: did the hardware finish the reset
-		 * (RESET_DONE latched) without the IRQ reaching us?
-		 */
-		uint32_t st = msm_camera_io_r(ispif->base +
-				ISPIF_VFE_m_IRQ_STATUS_0(VFE0));
-		uint32_t mask = msm_camera_io_r(ispif->base +
-				ISPIF_VFE_m_IRQ_MASK_0(VFE0));
-		pr_err("%s: VFE0 reset wait timeout: status0 0x%x mask0 0x%x vfe_vdd %d clks %d idx %d\n",
-			__func__, st, mask, ispif->vfe_vdd_count,
-			ispif->num_clk, ispif->clk_idx);
-		if (st & RESET_DONE_IRQ) {
-			pr_err("%s: RESET_DONE latched, IRQ lost; continuing\n",
-				__func__);
-			msm_camera_io_w(st, ispif->base +
-				ISPIF_VFE_m_IRQ_CLEAR_0(VFE0));
-			msm_camera_io_w_mb(ISPIF_IRQ_GLOBAL_CLEAR_CMD,
-				ispif->base + ISPIF_IRQ_GLOBAL_CLEAR_CMD_ADDR);
-			atomic_set(&ispif->reset_trig[VFE0], 0);
-		} else {
-			rc = -ETIMEDOUT;
-			goto clk_disable;
-		}
+	rc = msm_ispif_wait_reset(ispif, VFE0);
+	if (rc) {
+		pr_err("%s: VFE0 reset wait timeout\n", __func__);
+		goto clk_disable;
 	}
 
 	if (ispif->hw_num_isps > 1) {
+		reinit_completion(&ispif->reset_complete[VFE1]);
 		atomic_set(&ispif->reset_trig[VFE1], 1);
 		msm_camera_io_w(ISPIF_RST_CMD_1_MASK,
 					ispif->base + ISPIF_RST_CMD_1_ADDR);
-		timeout = wait_for_completion_timeout(
-				&ispif->reset_complete[VFE1],
-				msecs_to_jiffies(500));
-		CDBG("%s: VFE1 done\n", __func__);
-		if (timeout <= 0) {
-			uint32_t st = msm_camera_io_r(ispif->base +
-					ISPIF_VFE_m_IRQ_STATUS_0(VFE1));
-
-			pr_err("%s: VFE1 reset wait timeout: status0 0x%x\n",
-				__func__, st);
-			if (st & RESET_DONE_IRQ) {
-				msm_ispif_clear_all_irq_status(ispif);
-				atomic_set(&ispif->reset_trig[VFE1], 0);
-			} else {
-				rc = -ETIMEDOUT;
-			}
-		}
+		rc = msm_ispif_wait_reset(ispif, VFE1);
+		if (rc)
+			pr_err("%s: VFE1 reset wait timeout\n", __func__);
 	}
 
 clk_disable:
@@ -1253,7 +1241,6 @@ static int msm_ispif_restart_frame_boundary(struct ispif_device *ispif,
 	struct msm_ispif_param_data_ext *params)
 {
 	int rc = 0, i;
-	long timeout = 0;
 	uint16_t cid_mask;
 	enum msm_ispif_intftype intftype;
 	enum msm_ispif_vfe_intf vfe_intf;
@@ -1296,13 +1283,12 @@ static int msm_ispif_restart_frame_boundary(struct ispif_device *ispif,
 		goto disable_regulator;
 
 	if (vfe_mask & (1 << VFE0)) {
+		reinit_completion(&ispif->reset_complete[VFE0]);
 		atomic_set(&ispif->reset_trig[VFE0], 1);
 		/* initiate reset of ISPIF */
 		msm_camera_io_w(ISPIF_RST_CMD_MASK_RESTART,
 				ispif->base + ISPIF_RST_CMD_ADDR);
-		timeout = wait_for_completion_timeout(
-			&ispif->reset_complete[VFE0], msecs_to_jiffies(500));
-		if (timeout <= 0) {
+		if (msm_ispif_wait_reset(ispif, VFE0)) {
 			pr_err("%s: VFE0 reset wait timeout\n", __func__);
 			rc = -ETIMEDOUT;
 			goto disable_clk;
@@ -1310,13 +1296,11 @@ static int msm_ispif_restart_frame_boundary(struct ispif_device *ispif,
 	}
 
 	if (ispif->hw_num_isps > 1  && (vfe_mask & (1 << VFE1))) {
+		reinit_completion(&ispif->reset_complete[VFE1]);
 		atomic_set(&ispif->reset_trig[VFE1], 1);
 		msm_camera_io_w(ISPIF_RST_CMD_1_MASK_RESTART,
 			ispif->base + ISPIF_RST_CMD_1_ADDR);
-		timeout = wait_for_completion_timeout(
-				&ispif->reset_complete[VFE1],
-				msecs_to_jiffies(500));
-		if (timeout <= 0) {
+		if (msm_ispif_wait_reset(ispif, VFE1)) {
 			pr_err("%s: VFE1 reset wait timeout\n", __func__);
 			rc = -ETIMEDOUT;
 			goto disable_clk;
