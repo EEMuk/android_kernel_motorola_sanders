@@ -428,6 +428,23 @@ err:
 	return rc;
 }
 
+/* Clear every ISPIF interrupt status bit, so the IRQ line deasserts. */
+static void msm_ispif_clear_all_irq_status(struct ispif_device *ispif)
+{
+	int vfe;
+
+	for (vfe = VFE0; vfe < ispif->hw_num_isps && vfe <= VFE1; vfe++) {
+		msm_camera_io_w(0xFFFFFFFF, ispif->base +
+			ISPIF_VFE_m_IRQ_CLEAR_0(vfe));
+		msm_camera_io_w(0xFFFFFFFF, ispif->base +
+			ISPIF_VFE_m_IRQ_CLEAR_1(vfe));
+		msm_camera_io_w(0xFFFFFFFF, ispif->base +
+			ISPIF_VFE_m_IRQ_CLEAR_2(vfe));
+	}
+	msm_camera_io_w_mb(ISPIF_IRQ_GLOBAL_CLEAR_CMD,
+		ispif->base + ISPIF_IRQ_GLOBAL_CLEAR_CMD_ADDR);
+}
+
 static int msm_ispif_reset_hw(struct ispif_device *ispif)
 {
 	int rc = 0;
@@ -462,6 +479,14 @@ static int msm_ispif_reset_hw(struct ispif_device *ispif)
 		ispif->clk_idx = 1;
 	}
 	memset(ispif->stereo_configured, 0, sizeof(ispif->stereo_configured));
+	/*
+	 * The IRQ is edge-triggered on a level output. If an interrupt was
+	 * missed while the IRQ was disabled (3.18's GIC can't replay it),
+	 * stale status keeps the line high and no further edge ever comes:
+	 * RESET_DONE then latches without an interrupt. Clear everything
+	 * first so the reset produces a fresh edge.
+	 */
+	msm_ispif_clear_all_irq_status(ispif);
 	atomic_set(&ispif->reset_trig[VFE0], 1);
 	/* initiate reset of ISPIF */
 	msm_camera_io_w(ISPIF_RST_CMD_MASK,
@@ -472,9 +497,29 @@ static int msm_ispif_reset_hw(struct ispif_device *ispif)
 	CDBG("%s: VFE0 done\n", __func__);
 
 	if (timeout <= 0) {
-		rc = -ETIMEDOUT;
-		pr_err("%s: VFE0 reset wait timeout\n", __func__);
-		goto clk_disable;
+		/*
+		 * Bring-up diagnostics: did the hardware finish the reset
+		 * (RESET_DONE latched) without the IRQ reaching us?
+		 */
+		uint32_t st = msm_camera_io_r(ispif->base +
+				ISPIF_VFE_m_IRQ_STATUS_0(VFE0));
+		uint32_t mask = msm_camera_io_r(ispif->base +
+				ISPIF_VFE_m_IRQ_MASK_0(VFE0));
+		pr_err("%s: VFE0 reset wait timeout: status0 0x%x mask0 0x%x vfe_vdd %d clks %d idx %d\n",
+			__func__, st, mask, ispif->vfe_vdd_count,
+			ispif->num_clk, ispif->clk_idx);
+		if (st & RESET_DONE_IRQ) {
+			pr_err("%s: RESET_DONE latched, IRQ lost; continuing\n",
+				__func__);
+			msm_camera_io_w(st, ispif->base +
+				ISPIF_VFE_m_IRQ_CLEAR_0(VFE0));
+			msm_camera_io_w_mb(ISPIF_IRQ_GLOBAL_CLEAR_CMD,
+				ispif->base + ISPIF_IRQ_GLOBAL_CLEAR_CMD_ADDR);
+			atomic_set(&ispif->reset_trig[VFE0], 0);
+		} else {
+			rc = -ETIMEDOUT;
+			goto clk_disable;
+		}
 	}
 
 	if (ispif->hw_num_isps > 1) {
@@ -486,8 +531,17 @@ static int msm_ispif_reset_hw(struct ispif_device *ispif)
 				msecs_to_jiffies(500));
 		CDBG("%s: VFE1 done\n", __func__);
 		if (timeout <= 0) {
-			pr_err("%s: VFE1 reset wait timeout\n", __func__);
-			rc = -ETIMEDOUT;
+			uint32_t st = msm_camera_io_r(ispif->base +
+					ISPIF_VFE_m_IRQ_STATUS_0(VFE1));
+
+			pr_err("%s: VFE1 reset wait timeout: status0 0x%x\n",
+				__func__, st);
+			if (st & RESET_DONE_IRQ) {
+				msm_ispif_clear_all_irq_status(ispif);
+				atomic_set(&ispif->reset_trig[VFE1], 0);
+			} else {
+				rc = -ETIMEDOUT;
+			}
 		}
 	}
 
