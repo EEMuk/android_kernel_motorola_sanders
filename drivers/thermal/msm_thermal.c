@@ -3261,9 +3261,14 @@ static __ref int do_hotplug(void *data)
 
 	sched_setscheduler(current, SCHED_FIFO, &param);
 	while (!kthread_should_stop()) {
-		while (wait_for_completion_interruptible(
-			&hotplug_notify_complete) != 0)
-			;
+		/*
+		 * kthread_stop() does not complete hotplug_notify_complete, so
+		 * wake up regularly to notice it (hotplug_init() stops this
+		 * thread from the 'enabled' param handler, under the param lock).
+		 */
+		if (wait_for_completion_interruptible_timeout(
+			&hotplug_notify_complete, HZ) <= 0)
+			continue;
 		reinit_completion(&hotplug_notify_complete);
 
 		/*
@@ -3899,15 +3904,8 @@ init_kthread:
 	 * Adjust cpus offlined bit when hotplug intitializes so that the new
 	 * cpus offlined state is based on hotplug threshold range
 	 */
-	if (hotplug_init_cpu_offlined()) {
-		/*
-		 * do_hotplug() only leaves its wait on hotplug_notify_complete,
-		 * so kthread_stop() alone never returns (and blocks every
-		 * module parameter, as this runs from set_enabled()).
-		 */
-		complete(&hotplug_notify_complete);
+	if (hotplug_init_cpu_offlined())
 		kthread_stop(hotplug_task);
-	}
 }
 
 static __ref int do_freq_mitigation(void *data)
