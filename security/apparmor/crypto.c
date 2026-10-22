@@ -29,15 +29,32 @@ unsigned int aa_hash_size(void)
 	return apparmor_hash_size;
 }
 
+/* Caller ensures apparmor_tfm is set; SHASH_DESC_ON_STACK sizes from it. */
+static int aa_do_profile_hash(u8 *out, u32 version, void *start, size_t len)
+{
+	SHASH_DESC_ON_STACK(desc, apparmor_tfm);
+	u32 le32_version = cpu_to_le32(version);
+	int error;
+
+	desc->tfm = apparmor_tfm;
+	desc->flags = 0;
+
+	error = crypto_shash_init(desc);
+	if (error)
+		return error;
+	error = crypto_shash_update(desc, (u8 *) &le32_version, 4);
+	if (error)
+		return error;
+	error = crypto_shash_update(desc, (u8 *) start, len);
+	if (error)
+		return error;
+	return crypto_shash_final(desc, out);
+}
+
 int aa_calc_profile_hash(struct aa_profile *profile, u32 version, void *start,
 			 size_t len)
 {
-	struct {
-		struct shash_desc shash;
-		char ctx[crypto_shash_descsize(apparmor_tfm)];
-	} desc;
 	int error = -ENOMEM;
-	u32 le32_version = cpu_to_le32(version);
 
 	if (!apparmor_tfm)
 		return 0;
@@ -46,19 +63,7 @@ int aa_calc_profile_hash(struct aa_profile *profile, u32 version, void *start,
 	if (!profile->hash)
 		goto fail;
 
-	desc.shash.tfm = apparmor_tfm;
-	desc.shash.flags = 0;
-
-	error = crypto_shash_init(&desc.shash);
-	if (error)
-		goto fail;
-	error = crypto_shash_update(&desc.shash, (u8 *) &le32_version, 4);
-	if (error)
-		goto fail;
-	error = crypto_shash_update(&desc.shash, (u8 *) start, len);
-	if (error)
-		goto fail;
-	error = crypto_shash_final(&desc.shash, profile->hash);
+	error = aa_do_profile_hash(profile->hash, version, start, len);
 	if (error)
 		goto fail;
 
