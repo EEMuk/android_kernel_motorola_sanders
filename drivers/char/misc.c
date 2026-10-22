@@ -180,6 +180,18 @@ int misc_register(struct miscdevice * misc)
 	dev_t dev;
 	int err = 0;
 
+	/*
+	 * Registering a device that is still on misc_list used to reset its
+	 * list node in place, leaving a self-loop that makes every later
+	 * misc_open() spin forever under misc_mtx. Refuse it instead.
+	 */
+	if (misc->list.next && misc->list.next != LIST_POISON1 &&
+	    misc->list.next != &misc->list) {
+		WARN(1, "misc: %s (minor %d) registered twice by %pS\n",
+		     misc->name, misc->minor, __builtin_return_address(0));
+		return -EBUSY;
+	}
+
 	INIT_LIST_HEAD(&misc->list);
 
 	mutex_lock(&misc_mtx);
