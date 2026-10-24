@@ -57,13 +57,12 @@
 			no-map;
 			reg = <0x0 0xef000000 0x0 0x80000>;
 			/*
-			 * 3.18 used console 0x40000, record 0x3f800 and a
-			 * 0x800 Moto annotate area. 4.9 pstore has no annotate
-			 * zone and rounds records down to a power of two.
+			 * Same console offset as the 3.18 kernel (one dump record,
+			 * then the console at +0x40000), so a 3.18 boot can read
+			 * the console of a crashed 4.9 boot from pstore.
 			 */
 			console-size = <0x40000>;
-			record-size = <0x20000>;
-			pmsg-size = <0x20000>;
+			record-size = <0x40000>;
 		};
 
 		tzlog_bck_mem: tzlog_bck_region@eefe4000 {
@@ -276,9 +275,27 @@
 	};
 };
 
-/* BLSP2 QUP1 was the NFC bus; nothing else on it */
+/* BLSP2 QUP1: NFC (NXP PN544, Motorola pn544-mot driver) */
 &i2c_5 {
-	status = "disabled";
+	status = "okay";
+
+	pnxxx: pnxxx@28 {
+		compatible = "nxp,pn544";
+		reg = <0x28>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <17 0>;
+		gpios = <&tlmm 17 0>,	/* IRQ */
+			<&tlmm 16 0>,	/* VEN */
+			<&tlmm 62 0>;	/* Firmware */
+		nxp,pnxxx-discharge-delay = <100>;
+		nxp,pnxxx-ven-inv-polarity = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&nfc_irq_default &nfc_pwr_default &nfc_firm_default>;
+		qcom,clk-gpio = <&pm8953_gpios 2 0x00>;
+		qcom,clk-src = "BBCLK2";
+		clocks = <&clock_gcc clk_bb_clk2_pin>;
+		clock-names = "ref_clk";
+	};
 };
 
 /* BLSP2 QUP3: speaker amplifier and rear proximity/light sensor */

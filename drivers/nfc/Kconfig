@@ -70,6 +70,14 @@ source "drivers/nfc/st-nci/Kconfig"
 source "drivers/nfc/nxp-nci/Kconfig"
 source "drivers/nfc/s3fwrn5/Kconfig"
 source "drivers/nfc/st95hf/Kconfig"
+config PN544
+	bool "PN544 NFC driver (Motorola)"
+	depends on I2C
+	default n
+	help
+	  NXP PN544 NFC controller, Motorola driver (/dev/pn544) as used by
+	  the Moto G5S Plus (sanders).
+
 endmenu
 
 config NFC_NQ

@@ -716,3 +716,37 @@ CONFIG_WLAN_OFFLOAD_PACKETS=y
 CONFIG_QCOM_TDLS=y
 # CONFIG_SERIAL_MSM_HS is not set
 CONFIG_SENSORS=y
+# Size: Motorola's bootloader puts the device tree at 0x81e00000, so the
+# kernel (0x80080000 + image size incl. bss) must stay below ~30.9 MB
+CONFIG_CC_OPTIMIZE_FOR_SIZE=y
+# CONFIG_CORESIGHT is not set
+# CONFIG_SLUB_DEBUG is not set
+# CONFIG_ARCH_SDM450 is not set
+# CONFIG_ARCH_SDM632 is not set
+# CONFIG_NFC_NQ is not set
+# CONFIG_SCSI_UFSHCD is not set
+# CONFIG_ICNSS is not set
+# CONFIG_DVB_CORE is not set
+# CONFIG_F2FS_FS is not set
+# CONFIG_INPUT_JOYSTICK is not set
+# CONFIG_HID_APPLE is not set
+# CONFIG_HID_ELECOM is not set
+# CONFIG_HID_MAGICMOUSE is not set
+# CONFIG_HID_MICROSOFT is not set
+# CONFIG_HID_NINTENDO is not set
+# CONFIG_HID_SONY is not set
+# CONFIG_USB_RTL8152 is not set
+# CONFIG_USB_NET_AX8817X is not set
+# CONFIG_USB_NET_AX88179_178A is not set
+# CONFIG_USB_NET_NET1080 is not set
+# CONFIG_USB_NET_ZAURUS is not set
+# KASLR needs a kaslr-seed from the bootloader, which Motorola's LK does not
+# provide; its relocation table alone is 3.2 MB of the size budget
+# CONFIG_RANDOMIZE_BASE is not set
+# CONFIG_RELOCATABLE is not set
+# Wi-Fi driver as a module (wlan.ko), loaded by Ubuntu Touch at boot
+CONFIG_PRONTO_WLAN=m
+# CONFIG_KALLSYMS_ALL is not set
+# CONFIG_MSM_SDE_ROTATOR is not set
+# NFC: NXP PN544 (Motorola driver, /dev/pn544)
+CONFIG_PN544=y

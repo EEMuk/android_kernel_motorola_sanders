@@ -14,7 +14,7 @@
  * Moto G5S Plus (sanders) TLMM pin configuration, ported from the
  * Motorola 3.18 msm8953-sanders-pinctrl.dtsi. Groups that already exist
  * in msm8953-pinctrl.dtsi with identical settings (i2c_2, i2c_3, i2c_5,
- * sdc1/sdc2, cci, uart) are reused from there. NFC, ISDB-T (fc8300),
+ * sdc1/sdc2, cci, uart) are reused from there. ISDB-T (fc8300),
  * Moto Mods and the epl8802/sx9310 sensors are not ported.
  */
 
@@ -163,6 +163,50 @@
 	};
 
 	/* ltr559 proximity / ambient light interrupt */
+	/* NFC (NXP PN544): irq gpio17, enable gpio16, firmware gpio62 */
+	nfc_pins {
+		nfc_irq_default: nfc_irq_default {
+			mux {
+				pins = "gpio17";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio17";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+
+		nfc_pwr_default: nfc_pwr_default {
+			mux {
+				pins = "gpio16";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio16";
+				drive-strength = <2>;
+				bias-pull-down;
+				output-low;
+			};
+		};
+
+		nfc_firm_default: nfc_firm_default {
+			mux {
+				pins = "gpio62";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio62";
+				drive-strength = <2>;
+				bias-pull-down;
+				output-low;
+			};
+		};
+	};
+
 	ltr559_int_pin {
 		ltr559_default: ltr559_default {
 			mux {
