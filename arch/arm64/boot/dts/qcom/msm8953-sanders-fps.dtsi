@@ -1,0 +1,165 @@
+/* Copyright (c) 2016, Motorola Mobility Inc. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/*
+ * FPC1020 fingerprint sensor (TEE driven).
+ *
+ * In 3.18 the node was a child of spi_8. In this tree both fpc drivers
+ * (drivers/input/misc/fpc1020_tee.c, CONFIG_SENSORS_FPC_1020, and
+ * drivers/misc/fpr_FingerprintCard, CONFIG_FPR_FPC) are platform drivers
+ * matching "fpc,fpc1020", so the node lives under &soc. The SPI bus itself
+ * (BLSP2 QUP4, gpio96-99) is driven by TZ.
+ *
+ * GPIO names: fpc1020_tee.c reads "irq"/"rst" (as on sdm450-ali);
+ * fpr_FingerprintCard reads "fpc,gpio_irq"/"fpc,gpio_rst". Both are given.
+ */
+
+&tlmm {
+	sanders_fps {
+		fpc_ldo_en_active: fpc_ldo_en_active {
+			mux {
+				pins = "gpio63";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio63";
+				drive-strength = <2>;
+				bias-pull-up;
+				output-high;
+			};
+		};
+
+		fpc_ldo_en_suspend: fpc_ldo_en_suspend {
+			mux {
+				pins = "gpio63";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio63";
+				drive-strength = <2>;
+				bias-pull-up;
+				output-high;
+			};
+		};
+
+		fpc_rst_active: fpc_rst_active {
+			mux {
+				pins = "gpio140";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio140";
+				drive-strength = <2>;
+				bias-pull-up;
+				output-high;
+			};
+		};
+
+		fpc_rst_suspend: fpc_rst_suspend {
+			mux {
+				pins = "gpio140";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio140";
+				drive-strength = <2>;
+				bias-pull-up;
+				output-high;
+			};
+		};
+
+		fpc_int_active: fpc_int_active {
+			mux {
+				pins = "gpio48";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio48";
+				drive-strength = <2>;
+				input-enable;
+			};
+		};
+
+		fpc_int_suspend: fpc_int_suspend {
+			mux {
+				pins = "gpio48";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio48";
+				drive-strength = <2>;
+				input-enable;
+			};
+		};
+
+		fpc_id_default: fpc_id_default {
+			mux {
+				pins = "gpio141";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio141";
+				drive-strength = <2>;
+				bias-disable;
+				input-enable;
+			};
+		};
+	};
+};
+
+&soc {
+	/* BLSP2 QUP4. Owned by TZ (qcom,tz_gpio 96-99); kept for reference. */
+	spi_8: spi@7af8000 {
+		compatible = "qcom,spi-qup-v2";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg-names = "spi_physical";
+		reg = <0x07af8000 0x600>;
+		interrupt-names = "spi_irq";
+		interrupts = <0 302 0>;
+		spi-max-frequency = <19200000>;
+		pinctrl-names = "spi_default", "spi_sleep";
+		pinctrl-0 = <&spi_8_active &spi8_cs0_active>;
+		pinctrl-1 = <&spi_8_sleep &spi8_cs0_sleep>;
+		clocks = <&clock_gcc clk_gcc_blsp2_ahb_clk>,
+			 <&clock_gcc clk_gcc_blsp2_qup4_spi_apps_clk>;
+		clock-names = "iface_clk", "core_clk";
+		qcom,infinite-mode = <0>;
+		qcom,master-id = <84>;
+		qcom,use-pinctrl;
+		status = "disabled";
+	};
+
+	fpc_fpc1020: fpc_fpc1020 {
+		compatible = "fpc,fpc1020";
+		status = "okay";
+		interrupt-parent = <&tlmm>;
+		interrupts = <48 0x0>;
+		irq = <&tlmm 48 0>;
+		rst = <&tlmm 140 0>;
+		fpc,gpio_irq = <&tlmm 48 0>;
+		fpc,gpio_rst = <&tlmm 140 0>;
+		fpc,txout_boost_enable;
+		pinctrl-names = "default", "suspend";
+		pinctrl-0 = <&fpc_rst_active &fpc_int_active &fpc_ldo_en_active
+				&fpc_id_default>;
+		pinctrl-1 = <&fpc_rst_suspend &fpc_int_suspend
+				&fpc_ldo_en_suspend &fpc_id_default>;
+	};
+};

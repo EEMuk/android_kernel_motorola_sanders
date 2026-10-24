@@ -910,4 +910,12 @@ config INPUT_ABOV
 	  Say Y to enable the SAR detection application, if N here not to use the
 	  this SAR sensor
 
+config LTR559
+	tristate "LTR559 sensor support"
+	depends on I2C
+	default n
+	help
+	  Proximity and light sensor driver for the LiteOn LTR559 (Motorola
+	  sanders rear proximity sensor).
+
 endif

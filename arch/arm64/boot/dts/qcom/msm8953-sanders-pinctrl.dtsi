@@ -1,0 +1,266 @@
+/* Copyright (c) 2016, Motorola Mobility Inc. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/*
+ * Moto G5S Plus (sanders) TLMM pin configuration, ported from the
+ * Motorola 3.18 msm8953-sanders-pinctrl.dtsi. Groups that already exist
+ * in msm8953-pinctrl.dtsi with identical settings (i2c_2, i2c_3, i2c_5,
+ * sdc1/sdc2, cci, uart) are reused from there. NFC, ISDB-T (fc8300),
+ * Moto Mods and the epl8802/sx9310 sensors are not ported.
+ */
+
+&tlmm {
+	/* BLSP2 QUP3: cs35l35 amplifier + ltr559 proximity/light */
+	sanders_i2c_7 {
+		i2c_7_active: i2c_7_active {
+			mux {
+				pins = "gpio135", "gpio136";
+				function = "blsp_i2c7";
+			};
+
+			config {
+				pins = "gpio135", "gpio136";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+
+		i2c_7_sleep: i2c_7_sleep {
+			mux {
+				pins = "gpio135", "gpio136";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio135", "gpio136";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+	/* BLSP2 QUP4: fingerprint sensor SPI (owned by TZ, see qcom,tz_gpio) */
+	sanders_spi_8 {
+		spi_8_active: spi_8_active {
+			mux {
+				/* MOSI, MISO, CLK */
+				pins = "gpio96", "gpio97", "gpio99";
+				function = "blsp_spi8";
+			};
+
+			config {
+				pins = "gpio96", "gpio97", "gpio99";
+				drive-strength = <12>;
+				bias-disable;
+			};
+		};
+
+		spi_8_sleep: spi_8_sleep {
+			mux {
+				pins = "gpio96", "gpio97", "gpio99";
+				function = "blsp_spi8";
+			};
+
+			config {
+				pins = "gpio96", "gpio97", "gpio99";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+
+		spi8_cs0_active: spi8_cs0_active {
+			mux {
+				pins = "gpio98";
+				function = "blsp_spi8";
+			};
+
+			config {
+				pins = "gpio98";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+
+		spi8_cs0_sleep: spi8_cs0_sleep {
+			mux {
+				pins = "gpio98";
+				function = "blsp_spi8";
+			};
+
+			config {
+				pins = "gpio98";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+	/* Cirrus cs35l35 speaker amplifier */
+	cs35l35_reset_default: cs35l35_reset_default {
+		mux {
+			pins = "gpio137";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio137";
+			output-high;
+			bias-pull-up;
+			drive-strength = <2>;
+		};
+	};
+
+	cs35l35_irq_default: cs35l35_irq_default {
+		mux {
+			pins = "gpio132";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio132";
+			bias-pull-up;
+			drive-strength = <2>;
+		};
+	};
+
+	/* cs35l35 MCLK comes from the SEC MI2S MCLK pin */
+	cs35l35_mclk {
+		cs35l35_mclk_on: cs35l35_mclk_on {
+			mux {
+				pins = "gpio25";
+				function = "sec_mi2s_mclk_a";
+			};
+
+			config {
+				pins = "gpio25";
+				drive-strength = <8>;
+				output-high;
+			};
+		};
+
+		cs35l35_mclk_off: cs35l35_mclk_off {
+			mux {
+				pins = "gpio25";
+				function = "sec_mi2s_mclk_a";
+			};
+
+			config {
+				pins = "gpio25";
+				drive-strength = <2>;
+				output-low;
+				bias-pull-down;
+			};
+		};
+	};
+
+	/* ltr559 proximity / ambient light interrupt */
+	ltr559_int_pin {
+		ltr559_default: ltr559_default {
+			mux {
+				pins = "gpio86";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio86";
+				drive-strength = <6>;
+				bias-pull-up;
+			};
+		};
+
+		ltr559_sleep: ltr559_sleep {
+			mux {
+				pins = "gpio86";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio86";
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+	};
+
+	/* USB ID (OTG detect) */
+	usb_id_int_active {
+		usb_id_active: usb_id_active {
+			mux {
+				pins = "gpio59";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio59";
+				drive-strength = <8>;
+				bias-pull-up;
+			};
+		};
+	};
+
+	usb_id_int_sleep {
+		usb_id_sleep: usb_id_sleep {
+			mux {
+				pins = "gpio59";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio59";
+				drive-strength = <8>;
+				bias-disable;
+			};
+		};
+	};
+};
+
+/* Only vol_up (gpio85) is a key; gpio86 is the ltr559 interrupt */
+&gpio_key_active {
+	mux {
+		pins = "gpio85";
+	};
+
+	config {
+		pins = "gpio85";
+	};
+};
+
+&gpio_key_suspend {
+	mux {
+		pins = "gpio85";
+	};
+
+	config {
+		pins = "gpio85";
+	};
+};
+
+/* Panel reset is gpio61 only; gpio59 is the USB ID pin on sanders */
+&mdss_dsi_active {
+	mux {
+		pins = "gpio61";
+	};
+
+	config {
+		pins = "gpio61";
+	};
+};
+
+&mdss_dsi_suspend {
+	mux {
+		pins = "gpio61";
+	};
+
+	config {
+		pins = "gpio61";
+	};
+};

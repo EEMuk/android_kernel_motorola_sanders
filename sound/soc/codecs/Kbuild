@@ -83,3 +83,7 @@ ifeq ($(CONFIG_GINNA_DTB), y)
 snd_smartpa_aw882xx-objs = aw882xx.o
 obj-y += snd_smartpa_aw882xx.o
 endif
+
+# Moto G5S Plus (sanders) speaker amplifier
+snd-soc-cs35l35-objs := cs35l35.o
+obj-$(CONFIG_SND_SOC_CS35L35) += snd-soc-cs35l35.o

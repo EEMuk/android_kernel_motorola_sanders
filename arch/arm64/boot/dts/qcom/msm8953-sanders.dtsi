@@ -1,0 +1,744 @@
+/* Copyright (c) 2016, Motorola Mobility Inc. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/*
+ * Motorola Moto G5S Plus (sanders), MSM8953 + PMI8950.
+ *
+ * Ported from the Motorola 3.18 kernel (arch/arm/boot/dts/qcom/
+ * msm8953-sanders.dtsi and the files it includes) to the CAF 4.9
+ * msm8953 device tree. One dtb serves all board revisions; it follows the
+ * P1-P3 hardware (see the P4 notes at the white LED and chan@11 below).
+ *
+ * Not ported: NFC (pn544), ISDB-T (fc8300 on spi_1), Moto Mods (PMI/PM
+ * GPIOs and MPP4 for the mod bus), epl8802 and sx9310 sensors on i2c_2,
+ * the Marley slimbus codec stub, alsa_to_h2w (no 4.9 driver), the 3.18
+ * msm-thermal/sensor-information nodes (replaced by thermal zones).
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/qcom,pmic-mpp.h>
+#include "msm8953.dtsi"
+#include "pmi8950.dtsi"
+#include "msm8953-pmi8950.dtsi"
+#include "msm8953-sanders-pinctrl.dtsi"
+#include "msm8953-sanders-fps.dtsi"
+#include "msm8953-sanders-camera.dtsi"
+#include "msm8953-sanders-battery.dtsi"
+#include "dsi-panel-mot-dummy-qhd-video.dtsi"
+#include "dsi-panel-mot-tianma-550-1080p-vid.dtsi"
+#include "dsi-panel-mot-djn-550-1080p-vid.dtsi"
+#include "carrier-channel-ids.dtsi"
+
+/ {
+	aliases {
+		i2c7 = &i2c_7;
+		spi8 = &spi_8;
+	};
+
+	/*
+	 * Motorola debug memory just below 0xef080000, same addresses as on
+	 * 3.18 (moto-mem-reserve.h, *_8953 values):
+	 *   0xeefe4000 + 0x2000   tzlog backup (TZLOG_BCK_BASE_8953)
+	 *   0xeefe6000 + 0x1a000  watchdog CPU context (WDOG_CPUCTX_BASE_8953)
+	 *   0xef000000 + 0x80000  ramoops
+	 */
+	reserved-memory {
+		ramoops_mem: ramoops_mem_region@ef000000 {
+			compatible = "ramoops";
+			no-map;
+			reg = <0x0 0xef000000 0x0 0x80000>;
+			/*
+			 * 3.18 used console 0x40000, record 0x3f800 and a
+			 * 0x800 Moto annotate area. 4.9 pstore has no annotate
+			 * zone and rounds records down to a power of two.
+			 */
+			console-size = <0x40000>;
+			record-size = <0x20000>;
+			pmsg-size = <0x20000>;
+		};
+
+		tzlog_bck_mem: tzlog_bck_region@eefe4000 {
+			no-map;
+			reg = <0x0 0xeefe4000 0x0 0x2000>;
+			label = "tzlog_bck_mem";
+		};
+
+		/* TODO: 4.9 msm_watchdog does not dump CPU context here */
+		wdog_cpuctx_mem: wdog_cpuctx_region@eefe6000 {
+			no-map;
+			reg = <0x0 0xeefe6000 0x0 0x1a000>;
+			label = "wdog_cpuctx_mem";
+		};
+	};
+
+	utags: utags {
+		compatible = "mmi,utags";
+		mmi,main-utags = "/dev/block/bootdevice/by-name/utags";
+		mmi,backup-utags = "/dev/block/bootdevice/by-name/utagsBackup";
+	};
+
+	hw: hw {
+		compatible = "mmi,utags";
+		mmi,dir-name = "hw";
+		mmi,main-utags = "/dev/block/bootdevice/by-name/hw";
+	};
+};
+
+/*
+ * Android early-mount fstab from 3.18 (sanders has no vendor partition;
+ * "oem" was mounted as /vendor). Disabled: Halium mounts system/vendor
+ * itself. Set status = "ok" for a plain Android boot.
+ */
+&firmware {
+	android {
+		fstab {
+			system {
+				compatible = "android,system";
+				dev = "/dev/block/platform/soc/7824900.sdhci/by-name/system";
+				type = "ext4";
+				mnt_flags = "ro,barrier=1,discard";
+				fsmgr_flags = "wait,verify";
+				status = "disabled";
+			};
+
+			vendor {
+				compatible = "android,vendor";
+				dev = "/dev/block/platform/soc/7824900.sdhci/by-name/oem";
+				type = "ext4";
+				mnt_flags = "ro,barrier=1,discard";
+				fsmgr_flags = "wait,verify";
+				status = "disabled";
+			};
+		};
+	};
+};
+
+&soc {
+	gpio_keys {
+		compatible = "gpio-keys";
+		input-name = "gpio-keys";
+		pinctrl-names = "tlmm_gpio_key_active", "tlmm_gpio_key_suspend";
+		pinctrl-0 = <&gpio_key_active>;
+		pinctrl-1 = <&gpio_key_suspend>;
+
+		vol_up {
+			label = "volume_up";
+			gpios = <&tlmm 85 0x1>;
+			linux,input-type = <1>;
+			linux,code = <115>;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+		};
+	};
+
+	dummy_vreg: dummy_vreg {
+		compatible = "regulator-fixed";
+		status = "ok";
+		regulator-name = "dummy_vreg";
+		regulator-always-on;
+	};
+
+	i2c_7: i2c@7af7000 { /* BLSP2 QUP3 */
+		compatible = "qcom,i2c-msm-v2";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg-names = "qup_phys_addr";
+		reg = <0x7af7000 0x600>;
+		interrupt-names = "qup_irq";
+		interrupts = <0 301 0>;
+		qcom,clk-freq-out = <400000>;
+		qcom,clk-freq-in  = <19200000>;
+		clock-names = "iface_clk", "core_clk";
+		clocks = <&clock_gcc clk_gcc_blsp2_ahb_clk>,
+			 <&clock_gcc clk_gcc_blsp2_qup3_i2c_apps_clk>;
+		pinctrl-names = "i2c_active", "i2c_sleep";
+		pinctrl-0 = <&i2c_7_active>;
+		pinctrl-1 = <&i2c_7_sleep>;
+		qcom,noise-rjct-scl = <0>;
+		qcom,noise-rjct-sda = <0>;
+		qcom,master-id = <84>;
+		dmas = <&dma_blsp2 8 64 0x20000020 0x20>,
+			<&dma_blsp2 9 32 0x20000020 0x20>;
+		dma-names = "tx", "rx";
+		status = "okay";
+	};
+
+	/* Pins reserved for TZ (fingerprint SPI on BLSP2 QUP4) */
+	qcom,tz_gpio {
+		compatible = "qcom,tz_gpio";
+		tlmm-tz = <96>,
+			<97>,
+			<98>,
+			<99>;
+	};
+
+	sys_temp_support {
+		compatible = "mmi,sys-temp";
+		mmi,temperature-names = "front_temp",
+					"back_temp";
+		status = "ok";
+	};
+
+	/*
+	 * TODO: Motorola OSPL2xx speaker protection. No "mmi,ospl2xx" driver
+	 * in this tree. AFE ports 0x1016/0x1017 = QUINARY MI2S RX/TX.
+	 */
+	ospl {
+		compatible = "mmi,ospl2xx";
+		status = "disabled";
+		mmi,ospl-tune-index = <0 1 2 3>;
+		mmi,ospl-afe-port-id = <0x1016 0x1017>;
+		mmi,ospl-left-feedback;
+	};
+
+	/*
+	 * USB ID pin (gpio59) for OTG. 3.18 used the Motorola
+	 * "qcom,usbid-gpio" property of dwc3-msm, which 4.9 does not have.
+	 * TODO: enable this node and append it to &usb3 extcon (index 1)
+	 * once CONFIG_EXTCON_USB_GPIO is built in; a missing provider would
+	 * make dwc3-msm defer forever, so it is not wired up yet.
+	 */
+	usb_id_extcon: usb_id_extcon {
+		compatible = "linux,extcon-usb-gpio";
+		id-gpio = <&tlmm 59 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&usb_id_active>;
+		pinctrl-1 = <&usb_id_sleep>;
+		status = "disabled";
+	};
+};
+
+&wdog {
+	qcom,bark-time = <22000>;
+};
+
+&blsp1_uart0 {
+	status = "ok";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart_console_active>;
+};
+
+/* ---------------- I2C peripherals ---------------- */
+
+/* BLSP1 QUP2: epl8802 / sx9310 not ported; drop the WSA881x of the MTP */
+&i2c_2 {
+	status = "okay";
+	/delete-node/ wsa881x-i2c-codec@f;
+	/delete-node/ wsa881x-i2c-codec@45;
+};
+
+/* BLSP1 QUP3: FocalTech FT5436 touch (drivers/input/touchscreen/ft5x06_ts.c) */
+&i2c_3 {
+	status = "okay";
+
+	focaltech_ts@38 {
+		compatible = "focaltech,5x06";
+		reg = <0x38>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <65 0x2008>;
+		vdd-supply = <&pm8953_l10>;
+		vcc_i2c-supply = <&pm8953_l5>;
+		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
+		pinctrl-0 = <&ts_int_active &ts_reset_active>;
+		pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
+		focaltech,name = "ft5436";
+		focaltech,family-id = <0x54>;
+		focaltech,reset-gpio = <&tlmm 64 0x00>;
+		focaltech,irq-gpio = <&tlmm 65 0x2008>;
+		focaltech,display-coords = <0 0 1080 1920>;
+		focaltech,panel-coords = <0 0 1080 1920>;
+		focaltech,i2c-pull-up;
+		focaltech,group-id = <1>;
+		focaltech,hard-reset-delay-ms = <20>;
+		focaltech,soft-reset-delay-ms = <200>;
+		focaltech,num-max-touches = <10>;
+		focaltech,fw-delay-aa-ms = <2>;
+		focaltech,fw-delay-55-ms = <2>;
+		focaltech,fw-upgrade-id1 = <0x54>;
+		focaltech,fw-upgrade-id2 = <0x2c>;
+		focaltech,fw-delay-readid-ms = <20>;
+		focaltech,fw-delay-era-flsh-ms = <2000>;
+		focaltech,fw-auto-cal;
+		focaltech,ignore-id-check;
+		focaltech,resume-in-workqueue;
+		/* Motorola-only, not parsed by the 4.9 ft5x06 driver */
+		focaltech,vendor_ids = <0x02 0x04 0x10>;
+		focaltech,vendor_names = "toptouch", "biel", "djn";
+	};
+};
+
+/* BLSP2 QUP1 was the NFC bus; nothing else on it */
+&i2c_5 {
+	status = "disabled";
+};
+
+/* BLSP2 QUP3: speaker amplifier and rear proximity/light sensor */
+&i2c_7 {
+	cs35l35@40 {
+		compatible = "cirrus,cs35l35";
+		reg = <0x40>;
+		/* 4.9 driver uses gpiod "reset"/"irq" */
+		reset-gpios = <&tlmm 137 GPIO_ACTIVE_HIGH>;
+		irq-gpios = <&tlmm 132 GPIO_ACTIVE_HIGH>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <132 8>;
+		VA-supply = <&dummy_vreg>;
+		VP-supply = <&dummy_vreg>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cs35l35_irq_default &cs35l35_reset_default>;
+	};
+
+	/* Driver ported separately (drivers/input/misc/ltr559.c) */
+	liteon@23 {
+		compatible = "liteon,ltr559";
+		reg = <0x23>;
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&ltr559_default>;
+		pinctrl-1 = <&ltr559_sleep>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <86 0x2>;
+		vdd-supply = <&pm8953_l10>;
+		vio-supply = <&pm8953_l6>;
+		ltr,irq-gpio = <&tlmm 86 0x2>;
+		ltr,ps-threshold = <800>;
+		ltr,ps-hysteresis-threshold = <300>;
+		ltr,ps-nearoffset = <20>;
+		ltr,ps-faroffset = <15>;
+		ltr,als-polling-time = <200>;
+		ltr,prox-sensor-name = "Rear Proximity sensor";
+	};
+};
+
+/* ---------------- Audio ---------------- */
+
+/*
+ * Internal "cajon" codec (pm8953 analog + msm digital codec) with the
+ * cs35l35 speaker amp on QUINARY MI2S (qcom,msm-ext-pa = "quinary").
+ *
+ * 3.18 switched pins through qcom,msm-gpios/pinctrl tables in the sound
+ * node. The 4.9 msm8952 machine driver uses msm-cdc-pinctrl nodes, so the
+ * cs35l35 MCLK pin (gpio25) is muxed together with the QUIN MI2S lines.
+ *
+ * TODO (driver): the 4.9 msm8952.c quin MI2S BE link uses the dummy
+ * codec; a cs35l35 link (codec "cs35l35.<bus>-0040", dai "cs35l35-pcm")
+ * and the SEC MI2S MCLK enable have to be added there.
+ */
+&int_codec {
+	qcom,model = "msm8953-snd-card";
+	qcom,msm-ext-pa = "quinary";
+	qcom,msm-mbhc-hphl-swh = <1>;
+	qcom,msm-mbhc-gnd-swh = <0>;
+	qcom,msm-hs-micbias-type = "internal";
+	qcom,msm-micbias1-ext-cap;
+
+	qcom,audio-routing =
+			"RX_BIAS", "MCLK",
+			"SPK_RX_BIAS", "MCLK",
+			"INT_LDO_H", "MCLK",
+			"RX_I2S_CLK", "MCLK",
+			"TX_I2S_CLK", "MCLK",
+			"MIC BIAS External", "Handset Mic",
+			"MIC BIAS Internal2", "Headset Mic",
+			"MIC BIAS External", "Secondary Mic",
+			"AMIC1", "MIC BIAS External",
+			"AMIC2", "MIC BIAS Internal2",
+			"AMIC3", "MIC BIAS External",
+			"ADC1_IN", "ADC1_OUT",
+			"ADC2_IN", "ADC2_OUT",
+			"ADC3_IN", "ADC3_OUT",
+			"PDM_IN_RX1", "PDM_OUT_RX1",
+			"PDM_IN_RX2", "PDM_OUT_RX2",
+			"PDM_IN_RX3", "PDM_OUT_RX3";
+
+	/delete-property/ qcom,cdc-us-euro-gpios;
+	/delete-property/ qcom,cdc-us-eu-gpios;
+	/delete-property/ asoc-wsa-codec-names;
+	/delete-property/ asoc-wsa-codec-prefixes;
+	/delete-property/ msm-vdd-wsa-switch-supply;
+	/delete-property/ qcom,msm-vdd-wsa-switch-voltage;
+	/delete-property/ qcom,msm-vdd-wsa-switch-current;
+};
+
+&cdc_quin_mi2s_gpios {
+	pinctrl-0 = <&pri_tlmm_lines_act &pri_tlmm_ws_act &cs35l35_mclk_on>;
+	pinctrl-1 = <&pri_tlmm_lines_sus &pri_tlmm_ws_sus &cs35l35_mclk_off>;
+};
+
+/* ---------------- PMIC: buttons, haptics, LED, MPPs ---------------- */
+
+&spmi_bus {
+	qcom,pm8953@0 {
+		qcom,power-on@800 {
+			qcom,pon_1 {
+				qcom,pon-type = <0>;
+				qcom,support-reset = <1>;
+				qcom,pull-up = <1>;
+				qcom,s1-timer = <6720>;
+				qcom,s2-timer = <2000>;
+				qcom,s2-type = <8>;
+				linux,code = <116>;
+			};
+		};
+	};
+
+	qcom,pmi8950@2 {
+		/* P1-P3: white notification LED on PMI8950 MPP2 */
+		qcom,leds@a100 {
+			status = "okay";
+			qcom,led_mpp_2 {
+				label = "mpp";
+				linux,name = "white";
+				linux,default-trigger = "none";
+				qcom,default-state = "off";
+				qcom,max-current = <40>;
+				qcom,current-setting = <5>;
+				qcom,id = <6>;
+				qcom,mode = "manual";
+				qcom,source-sel = <1>;
+				qcom,mode-ctrl = <0x60>;
+			};
+		};
+
+		/*
+		 * P4 (board-id 0x8400) drives the LED from the charger ATC
+		 * pin instead. For a P4-only build: disable leds@a100 above,
+		 * enable this node and set CONFIG_LEDS_ATC.
+		 */
+		qcom,leds@1000 {
+			compatible = "qcom,leds-atc";
+			reg = <0x1000 0x100>;
+			linux,name = "white";
+			qcom,ctrl-reg = <0x243>;
+			status = "disabled";
+		};
+	};
+};
+
+/* LRA haptics (leds-qpnp-haptics bindings) */
+&pmi_haptic {
+	qcom,actuator-type = <0>;	/* LRA */
+	qcom,vmax-mv = <1950>;
+	qcom,wave-play-rate-us = <4255>;
+	qcom,wave-shape = "sine";
+	qcom,lra-auto-res-mode = "none";
+	qcom,lra-high-z = "none";
+	qcom,lra-res-cal-period = <4>;
+	qcom,brake-pattern = <0x3 0x3 0x3 0x3>;
+	/*
+	 * Not carried over (no 4.9 equivalent for PMI8950):
+	 * qcom,correct-lra-drive-freq and
+	 * qcom,misc-trim-error-rc19p2-clk-reg-present. 4.9 needs
+	 * qcom,pmic-misc + qcom,misc-clk-trim-error-reg instead, and
+	 * pmi8950.dtsi has no misc node.
+	 */
+};
+
+/*
+ * PMI8950 MPPs (4.9 spmi-mpp pinctrl, applied as hogs):
+ *   MPP1: host detect, analog input on AMUX ch5 (pmi8950_vadc chan@10)
+ *   MPP3: digital output driven from DTEST2 (display rail control)
+ */
+&pmi8950_mpps {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pmi_mpp1_host_det &pmi_mpp3_dtest2>;
+
+	pmi_mpp1_host_det: pmi_mpp1_host_det {
+		pins = "mpp1";
+		function = "analog";
+		input-enable;
+		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH5>;
+	};
+
+	pmi_mpp3_dtest2: pmi_mpp3_dtest2 {
+		pins = "mpp3";
+		function = "digital";
+		output-low;
+		power-source = <0>;
+		qcom,dtest = <2>;
+	};
+};
+
+&pmi8950_vadc {
+	chan@10 {
+		label = "host_det";
+		reg = <0x10>;
+		qcom,decimation = <0>;
+		qcom,pre-div-channel-scaling = <1>;
+		qcom,calibration-type = "absolute";
+		qcom,scale-function = <0>;
+		qcom,hw-settle-time = <0>;
+		qcom,fast-avg-setup = <0>;
+	};
+};
+
+&pm8953_vadc {
+	/* P1-P3: board ID divider. (P4 uses this channel as chg_therm.) */
+	chan@11 {
+		label = "board_id";
+		qcom,scale-function = <0>;
+		/delete-property/ qcom,vadc-thermal-node;
+	};
+
+	chan@13 {
+		label = "msm_therm";
+	};
+};
+
+&pm8953_typec {
+	status = "disabled";
+};
+
+/* ---------------- Charger / fuel gauge ---------------- */
+
+&qpnp_smbcharger {
+	status = "okay";
+	/* no PM8953 Type-C on sanders */
+	/delete-property/ qcom,external-typec;
+	/delete-property/ qcom,typec-psy-name;
+	/delete-property/ qcom,iterm-ma;
+	/delete-property/ qcom,autoadjust-vfloat;
+	qcom,battery-data = <&mot_batterydata>;
+	qcom,iterm-disabled;
+	qcom,fastchg-current-ma = <3000>;
+	qcom,float-voltage-mv = <4400>;
+	qcom,resume-delta-mv = <200>;
+	qcom,chg-inhibit-fg;
+	qcom,rparasitic-uohm = <100000>;
+	qcom,bms-psy-name = "bms";
+	qcom,charge-unknown-battery;
+	qcom,chg-thermal-mitigation = <3000>, <2500>, <2000>, <1600>,
+		<1000>, <500>, <300>;
+	qcom,dc-thermal-mitigation = <950>, <700>, <600>, <500>, <400>, <300>;
+	qcom,parallel-charge-current-map = <2500 2500 0>,
+					   <2000 2000 0>,
+					   <1600 1600 0>,
+					   <1200 1200 0>,
+					   <1000 1000 0>,
+					   <700 700 0>,
+					   <500 500 0>,
+					   <300 300 0>;
+	qcom,stepchg-voltage-mv = <4200>;
+	qcom,stepchg-current-ma = <2000>;
+	qcom,stepchg-taper-ma = <1800>;
+	qcom,stepchg-iterm-ma = <60>;
+	qcom,hot-temp-c = <60>;
+	qcom,cold-temp-c = <(-20)>;
+	qcom,warm-temp-c = <45>;
+	qcom,cool-temp-c = <0>;
+	qcom,temp-warm-current-ma = <1500>;
+	qcom,temp-cool-current-ma = <600>;
+	qcom,temp-slightly-cool-current-ma = <600>;
+	qcom,slightly-cool-temp-c = <15>;
+	qcom,ext-temp-volt-mv = <4200>;
+	qcom,hotspot-thrs-c = <50>;
+	qcom,charging-timeout-mins = <0>;
+	qcom,precharging-timeout-mins = <0>;
+	qcom,bmd-algo-disabled;
+	qcom,bmd-pin-src = "bpd_none";
+	qcom,usbid-disabled;
+	qcom,usbid-gpio-enabled;
+	qcom,force-aicl-rerun;
+	qcom,auto-voltage-comp-mv = <75>;
+	qcom,enable-hvdcp-9v;
+	qcom,enable-factory-wa;
+	qcom,enable-charging-limit;
+	qcom,upper-limit-capacity = <70>;
+	qcom,lower-limit-capacity = <60>;
+};
+
+&qpnp_fg {
+	status = "okay";
+	qcom,warm-bat-decidegc = <450>;
+	qcom,cool-bat-decidegc = <0>;
+	qcom,hot-bat-decidegc = <600>;
+	qcom,cold-bat-decidegc = <(-200)>;
+	/delete-property/ qcom,ext-sense-type;
+	qcom,thermal-coefficients = /bits/ 16 <0xDA86 0xF050 0x083C>;
+	qcom,resume-soc = <99>;
+	qcom,bcl-lm-threshold-ma = <126>;
+	qcom,bcl-mh-threshold-ma = <400>;
+	qcom,fg-iterm-ma = <150>;
+	qcom,fg-chg-iterm-ma = <60>;
+	qcom,irq-volt-empty-mv = <3000>;
+	qcom,fg-cutoff-voltage-mv = <3200>;
+	qcom,fg-vbat-estimate-diff-mv = <1000>;
+	qcom,fg-delta-soc = <1>;
+	qcom,fg-max-soc = <100>;
+	qcom,fg-min-soc = <0>;
+	qcom,fg-cc-cv-threshold-mv = <4390>;
+	qcom,battery-data = <&mot_batterydata>;
+	qcom,low-batt-temp-comp;
+	qcom,cl-vbat-est-thr-uv = <300000>;
+	qcom,fg-force-restart-enable;
+};
+
+/* ---------------- Thermal ---------------- */
+
+&thermal_zones {
+	msm_therm {
+		polling-delay-passive = <1000>;
+		polling-delay = <1000>;
+		thermal-sensors = <&pm8953_vadc 0x13>;
+		thermal-governor = "user_space";
+
+		trips {
+			active-config0 {
+				temperature = <65000>;
+				hysteresis = <1000>;
+				type = "passive";
+			};
+		};
+	};
+};
+
+/* ---------------- Storage ---------------- */
+
+&sdhc_1 {
+	/* device core power supply */
+	vdd-supply = <&pm8953_l8>;
+	qcom,vdd-voltage-level = <2900000 2900000>;
+	qcom,vdd-current-level = <200 570000>;
+
+	/* device communication power supply */
+	vdd-io-supply = <&pm8953_l5>;
+	qcom,vdd-io-always-on;
+	qcom,vdd-io-lpm-sup;
+	qcom,vdd-io-voltage-level = <1800000 1800000>;
+	qcom,vdd-io-current-level = <200 325000>;
+
+	pinctrl-names = "active", "sleep";
+	pinctrl-0 = <&sdc1_clk_on &sdc1_cmd_on &sdc1_data_on &sdc1_rclk_on>;
+	pinctrl-1 = <&sdc1_clk_off &sdc1_cmd_off &sdc1_data_off &sdc1_rclk_off>;
+
+	qcom,clk-rates = <400000 20000000 25000000 50000000 100000000 192000000
+								384000000>;
+	qcom,nonremovable;
+	qcom,bus-speed-mode = "HS400_1p8v", "HS200_1p8v", "DDR_1p8v";
+
+	status = "ok";
+};
+
+&sdhc_2 {
+	/* device core power supply */
+	vdd-supply = <&pm8953_l11>;
+	qcom,vdd-voltage-level = <2950000 2950000>;
+	qcom,vdd-current-level = <15000 800000>;
+
+	/* device communication power supply */
+	vdd-io-supply = <&pm8953_l12>;
+	qcom,vdd-io-voltage-level = <1800000 2950000>;
+	qcom,vdd-io-current-level = <200 22000>;
+
+	/* card detect has an external pull; no internal pull in any state */
+	pinctrl-names = "active", "sleep";
+	pinctrl-0 = <&sdc2_clk_on &sdc2_cmd_on &sdc2_data_on &sdc2_cd_off>;
+	pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off &sdc2_cd_off>;
+
+	#address-cells = <0>;
+	interrupt-parent = <&sdhc_2>;
+	interrupts = <0 1 2>;
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0xffffffff>;
+	interrupt-map = <0 &intc 0 125 0
+		1 &intc 0 221 0
+		2 &tlmm 133 0>;
+	interrupt-names = "hc_irq", "pwr_irq", "status_irq";
+	cd-gpios = <&tlmm 133 0x1>;
+	qcom,cd-wakeup;
+
+	qcom,clk-rates = <400000 20000000 25000000 50000000 100000000
+								192000000>;
+	qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50", "DDR50", "SDR104";
+
+	status = "ok";
+};
+
+/* Motorola TZ / QSEE carve-out layout (same as 3.18 sanders and ali) */
+&other_ext_mem {
+	reg = <0x0 0x84300000 0x0 0x2500000>;
+};
+
+&qcom_seecom {
+	reg = <0x84300000 0x2000000>;
+};
+
+/* ---------------- Regulators ---------------- */
+
+&pm8953_l2 {
+	regulator-min-microvolt = <1200000>;
+	regulator-max-microvolt = <1200000>;
+	qcom,init-voltage = <1200000>;
+};
+
+&pm8953_l6 {
+	regulator-always-on;
+};
+
+&pm8953_l10 {
+	regulator-always-on;
+};
+
+&pm8953_l23 {
+	qcom,init-voltage = <1200000>;
+};
+
+/* ---------------- Display ---------------- */
+
+/* WLED backlight: 2 strings (pmi8950.dtsi default [00 01]) */
+&wled {
+	qcom,fs-curr-ua = <25000>;
+	qcom,cons-sync-write-delay-us = <1000>;
+	qcom,en-cabc;
+};
+
+/* display boost (LAB) and inverting boost (IBB) regulators */
+&labibb {
+	status = "ok";
+	qpnp,qpnp-labibb-mode = "lcd";
+};
+
+&ibb_regulator {
+	qcom,qpnp-ibb-discharge-resistor = <32>;
+};
+
+&mdss_mdp {
+	qcom,mdss-pref-prim-intf = "dsi";
+};
+
+&mdss_dsi {
+	hw-config = "dual_dsi";
+};
+
+/*
+ * Panel is chosen by the bootloader (mdss_mdp.panel= on the command line,
+ * matching the qcom,mdss_dsi_mot_* node name); tianma is the default.
+ */
+&mdss_dsi0 {
+	qcom,display-id = "primary";
+	pinctrl-names = "mdss_default", "mdss_sleep";
+	pinctrl-0 = <&mdss_dsi_active>;
+	pinctrl-1 = <&mdss_dsi_suspend>;
+
+	qcom,dsi-pref-prim-pan = <&mot_tianma_550_1080p_vid_v0>;
+
+	/* pm8953_l17 is the camera AF rail on sanders */
+	/delete-property/ vdd-supply;
+	vddio_disp-supply = <&pm8953_l6>;
+	vsp_disp-supply = <&lab_regulator>;
+	vsn_disp-supply = <&ibb_regulator>;
+
+	qcom,platform-reset-gpio = <&tlmm 61 0>;
+};
+
+&mdss_dsi1 {
+	status = "disabled";
+};

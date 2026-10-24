@@ -4,12 +4,12 @@ KERNEL_BUILD := 0
 
 
 ifeq ($(KERNEL_BUILD), 0)
-	# These are configurable via Kconfig for kernel-based builds
-	# Need to explicitly configure for Android-based builds
-	ifeq ($(CONFIG_ARCH_MSM8909), y)
-		include $(AUDIO_ROOT)/config/msm8909auto.conf
-		export
-	endif
+    # These are configurable via Kconfig for kernel-based builds
+    # Need to explicitly configure for Android-based builds
+    ifeq ($(CONFIG_ARCH_MSM8909), y)
+    include $(AUDIO_ROOT)/config/msm8909auto.conf
+    export
+    endif
 endif
 
 
@@ -41,14 +41,14 @@ COMMON_INC :=	-I$(AUDIO_ROOT)/$(COMMON_DIR)
 
 # for BG Codec
 ifeq ($(CONFIG_SND_SOC_BG_CODEC), m)
-	BG_CODEC_CDC_OBJS += bg_codec.o
-	BG_CODEC_CDC_OBJS += pktzr.o
+    BG_CODEC_CDC_OBJS += bg_codec.o
+    BG_CODEC_CDC_OBJS += pktzr.o
 endif
 
 LINUX_INC +=	-Iinclude/linux
 
 INCS :=		$(COMMON_INC) \
-		$(UAPI_INC)
+    $(UAPI_INC)
 
 ifeq ($(CONFIG_ARCH_MSM8909), y)
 INCS    +=  -include $(AUDIO_ROOT)/config/msm8909autoconf.h
@@ -58,14 +58,14 @@ EXTRA_CFLAGS += $(INCS)
 
 
 CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
-		-DANI_LITTLE_BIT_ENDIAN \
-		-DDOT11F_LITTLE_ENDIAN_HOST \
-		-DANI_COMPILER_TYPE_GCC \
-		-DANI_OS_TYPE_ANDROID=6 \
-		-DPTT_SOCK_SVC_ENABLE \
-		-Wall\
-		-Werror\
-		-D__linux__
+    -DANI_LITTLE_BIT_ENDIAN \
+    -DDOT11F_LITTLE_ENDIAN_HOST \
+    -DANI_COMPILER_TYPE_GCC \
+    -DANI_OS_TYPE_ANDROID=6 \
+    -DPTT_SOCK_SVC_ENABLE \
+    -Wall\
+    -Werror\
+    -D__linux__
 
 KBUILD_CPPFLAGS += $(CDEFINES)
 
