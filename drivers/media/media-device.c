@@ -36,6 +36,9 @@
 #include <media/media-device.h>
 #include <media/media-devnode.h>
 #include <media/media-entity.h>
+#include <media/msmb_camera.h>
+#include <media/v4l2-dev.h>
+#include <media/v4l2-subdev.h>
 
 #ifdef CONFIG_MEDIA_CONTROLLER
 
@@ -119,23 +122,31 @@ static long media_device_enum_entities(struct media_device *mdev, void *arg)
 	entd->pads = ent->num_pads;
 	entd->links = ent->num_links - ent->num_backlinks;
 
-	/*
-	 * Workaround for a bug at media-ctl <= v1.10 that makes it to
-	 * do the wrong thing if the entity function doesn't belong to
-	 * either MEDIA_ENT_F_OLD_BASE or MEDIA_ENT_F_OLD_SUBDEV_BASE
-	 * Ranges.
-	 *
-	 * Non-subdevices are expected to be at the MEDIA_ENT_F_OLD_BASE,
-	 * or, otherwise, will be silently ignored by media-ctl when
-	 * printing the graphviz diagram. So, map them into the devnode
-	 * old range.
-	 */
-	if (ent->function < MEDIA_ENT_F_OLD_BASE ||
-	    ent->function > MEDIA_ENT_F_TUNER) {
-		if (is_media_entity_v4l2_subdev(ent))
-			entd->type = MEDIA_ENT_F_V4L2_SUBDEV_UNKNOWN;
-		else if (ent->function != MEDIA_ENT_F_IO_V4L)
-			entd->type = MEDIA_ENT_T_DEVNODE_UNKNOWN;
+	if (is_media_entity_v4l2_subdev(ent)) {
+		struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(ent);
+		if (sd && sd->devnode)
+			entd->revision = sd->devnode->num;
+	} else if (is_media_entity_v4l2_video_device(ent)) {
+		struct video_device *vdev = media_entity_to_video_device(ent);
+		if (vdev)
+			entd->revision = vdev->num;
+	}
+
+	if (ent->function >= MSM_CAMERA_SUBDEV_BASE &&
+	    ent->function <= MSM_CAMERA_SUBDEV_BASE + 32) {
+		entd->type = MEDIA_ENT_F_OLD_SUBDEV_BASE; /* 0x20000 */
+		entd->group_id = ent->function - MSM_CAMERA_SUBDEV_BASE;
+		if (entd->group_id == 22)
+			entd->group_id = 20; /* MSM_CAMERA_SUBDEV_CCI_INTF */
+	} else if (ent->function == MEDIA_ENT_F_IO_V4L) {
+		entd->type = MEDIA_ENT_F_IO_V4L; /* 0x10001 */
+		entd->group_id = QCAMERA_VNODE_GROUP_ID; /* 2 */
+	} else if (is_media_entity_v4l2_subdev(ent)) {
+		entd->type = MEDIA_ENT_F_OLD_SUBDEV_BASE; /* 0x20000 */
+		entd->group_id = 0;
+	} else if (ent->function < MEDIA_ENT_F_OLD_BASE ||
+		   ent->function > MEDIA_ENT_F_TUNER) {
+		entd->type = MEDIA_ENT_T_DEVNODE_UNKNOWN;
 	}
 
 	memcpy(&entd->raw, &ent->info, sizeof(ent->info));
@@ -695,6 +706,8 @@ void media_device_init(struct media_device *mdev)
 	INIT_LIST_HEAD(&mdev->entity_notify);
 	mutex_init(&mdev->graph_mutex);
 	ida_init(&mdev->entity_internal_idx);
+	mdev->id = 0;
+	mdev->entity_id = 0;
 
 	dev_dbg(mdev->dev, "Media device initialized\n");
 }

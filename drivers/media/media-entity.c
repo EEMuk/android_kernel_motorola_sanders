@@ -179,7 +179,10 @@ void media_gobj_create(struct media_device *mdev,
 	gobj->mdev = mdev;
 
 	/* Create a per-type unique object ID */
-	gobj->id = media_gobj_gen_id(type, ++mdev->id);
+	if (type == MEDIA_GRAPH_ENTITY)
+		gobj->id = media_gobj_gen_id(type, ++mdev->entity_id);
+	else
+		gobj->id = media_gobj_gen_id(type, ++mdev->id);
 
 	switch (type) {
 	case MEDIA_GRAPH_ENTITY:
