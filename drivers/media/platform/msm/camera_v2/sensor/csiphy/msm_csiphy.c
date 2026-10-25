@@ -190,14 +190,6 @@ static int msm_csiphy_snps_2_lane_config(
 
 	csiphybase = csiphy_dev->base;
 
-	if (csiphy_params->data_rate >
-		SNPS_MAX_DATA_RATE_PER_LANE * num_lanes) {
-		pr_err("unsupported data rate\n");
-		return -EINVAL;
-	}
-
-	local_data_rate = csiphy_params->data_rate;
-
 	if (mode == TWO_LANE_PHY_A)
 		offset = 0x0;
 	else if (mode == TWO_LANE_PHY_B)
@@ -220,7 +212,7 @@ static int msm_csiphy_snps_2_lane_config(
 		diff = diff_i;
 	}
 
-	csiphy_dev->snps_programmed_data_rate = csiphy_params->data_rate;
+	csiphy_dev->snps_programmed_data_rate = 0;
 
 	if (mode == TWO_LANE_PHY_A) {
 		msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_snps_reg.
@@ -350,11 +342,7 @@ static int msm_csiphy_snps_lane_config(
 		mode = AGGREGATE_MODE;
 		num_lanes = 4;
 		if (csiphy_dev->snps_state != NOT_CONFIGURED) {
-			if (csiphy_dev->snps_programmed_data_rate !=
-				csiphy_params->data_rate)
-				pr_err("reconfiguring snps phy");
-			else
-				return 0;
+			pr_err("reconfiguring snps phy");
 		}
 		csiphy_dev->snps_state = CONFIGURED_AGGREGATE_MODE;
 		clk_mux_reg &= ~0xff;
@@ -371,11 +359,7 @@ static int msm_csiphy_snps_lane_config(
 			/* 2 lane + 2 lane config */
 			csiphy_dev->snps_state = CONFIGURED_COMBO_MODE;
 		} else {
-			if (csiphy_dev->snps_programmed_data_rate !=
-				csiphy_params->data_rate)
-				pr_err("reconfiguring snps phy");
-			else
-				return 0;
+			pr_err("reconfiguring snps phy");
 		}
 		clk_mux_reg &= ~0xf;
 		clk_mux_reg |= (uint32_t)csiphy_params->csid_core;
@@ -390,11 +374,7 @@ static int msm_csiphy_snps_lane_config(
 			/* 2 lane + 2 lane config */
 			csiphy_dev->snps_state = CONFIGURED_COMBO_MODE;
 		} else {
-			if (csiphy_dev->snps_programmed_data_rate !=
-				csiphy_params->data_rate)
-				pr_err("reconfiguring snps phy");
-			else
-				return 0;
+			pr_err("reconfiguring snps phy");
 		}
 		clk_mux_reg &= ~0xf0;
 		clk_mux_reg |= csiphy_params->csid_core << 4;
@@ -1362,10 +1342,10 @@ static int msm_csiphy_lane_config(struct csiphy_device *csiphy_dev,
 		ratio = csiphy_dev->csiphy_max_clk/clk_rate;
 		csiphy_params->settle_cnt = csiphy_params->settle_cnt/ratio;
 	}
-	CDBG("%s csiphy_params, mask = 0x%x cnt = %d, data rate = %llu\n",
+	CDBG("%s csiphy_params, mask = 0x%x cnt = %d\n",
 		__func__,
 		csiphy_params->lane_mask,
-		csiphy_params->lane_cnt, csiphy_params->data_rate);
+		csiphy_params->lane_cnt);
 	CDBG("%s csiphy_params, settle cnt = 0x%x csid %d\n",
 		__func__, csiphy_params->settle_cnt,
 		csiphy_params->csid_core);
