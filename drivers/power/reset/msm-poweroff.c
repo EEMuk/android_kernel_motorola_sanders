@@ -303,6 +303,10 @@ static void msm_restart_prepare(const char *cmd)
 				(cmd != NULL && cmd[0] != '\0'));
 	}
 
+	/* Bring-up: keep DDR so the crash log in ramoops survives */
+	if (IS_ENABLED(CONFIG_FWDBG_STRIPES))
+		need_warm_reset = true;
+
 	if (force_warm_reboot)
 		pr_info("Forcing a warm reset of the system\n");
 
@@ -322,9 +326,11 @@ static void msm_restart_prepare(const char *cmd)
 				RESET_EXTRA_REBOOT_BL_REASON);
 			/*
 			 * force cold reboot here to avoid unexpected
-			 * warm boot from bootloader.
+			 * warm boot from bootloader. Bring-up builds keep the
+			 * warm reset so the crash log in ramoops survives.
 			 */
-			qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
+			if (!IS_ENABLED(CONFIG_FWDBG_STRIPES))
+				qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
 		} else if (!strncmp(cmd, "recovery", 8)) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_RECOVERY);

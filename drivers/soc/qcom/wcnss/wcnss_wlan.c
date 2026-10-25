@@ -1924,6 +1924,13 @@ int wcnss_get_wlan_unsafe_channel(u16 *unsafe_ch_list, u16 buffer_size,
 }
 EXPORT_SYMBOL(wcnss_get_wlan_unsafe_channel);
 
+/*
+ * The NV/calibration download can start while the WCNSS firmware is still
+ * draining the SMD FIFO; 4 x 20 ms was too short on sanders with 4.9 and
+ * the aborted download left the firmware failing to start (halStatus 38).
+ */
+#define WCNSS_SMD_TX_RETRIES	100
+
 static int wcnss_smd_tx(void *data, int len)
 {
 	int ret = 0;
@@ -2523,7 +2530,7 @@ static void wcnss_nvbin_dnld(void)
 		ret = wcnss_smd_tx(outbuffer, dnld_req_msg->hdr.msg_len);
 
 		retry_count = 0;
-		while ((ret == -ENOSPC) && (retry_count <= 3)) {
+		while ((ret == -ENOSPC) && (retry_count <= WCNSS_SMD_TX_RETRIES)) {
 			wcnss_log(DBG, "%s: smd tx failed, ENOSPC\n",
 				 __func__);
 			wcnss_log(DBG, "fragment %d, len: %d,", count,
@@ -2616,7 +2623,7 @@ static void wcnss_caldata_dnld(const void *cal_data,
 		ret = wcnss_smd_tx(outbuffer, cal_msg->hdr.msg_len);
 
 		retry_count = 0;
-		while ((ret == -ENOSPC) && (retry_count <= 3)) {
+		while ((ret == -ENOSPC) && (retry_count <= WCNSS_SMD_TX_RETRIES)) {
 			wcnss_log(DBG, "%s: smd tx failed, ENOSPC\n",
 				 __func__);
 			wcnss_log(DBG, "fragment: %d, len: %d",
@@ -3612,6 +3619,7 @@ wcnss_wlan_probe(struct platform_device *pdev)
 
 	penv->pdev = pdev;
 	penv->wcnss_nv_name[0] = 0;
+
 
 	penv->user_cal_data =
 		devm_kzalloc(&pdev->dev, MAX_CALIBRATED_DATA_SIZE, GFP_KERNEL);

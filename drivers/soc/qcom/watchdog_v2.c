@@ -23,6 +23,7 @@
 #include <linux/irq.h>
 #include <linux/percpu.h>
 #include <linux/of.h>
+#include <linux/fwdbg.h>
 #include <linux/cpu.h>
 #include <linux/cpu_pm.h>
 #include <linux/platform_device.h>
@@ -528,6 +529,12 @@ static irqreturn_t wdog_bark_handler(int irq, void *dev_id)
 			(unsigned long) wdog_dd->last_pet, nanosec_rem / 1000);
 	if (wdog_dd->do_ipi_ping)
 		dump_cpu_alive_mask(wdog_dd);
+#ifdef CONFIG_FWDBG_STRIPES
+	fwdbg_paint(900, 255, 0, 0); /* Bright RED at row 900 for Watchdog bark */
+	fwdbg_paint(930, 255, 0, 255); /* Bright MAGENTA at row 930 */
+	fwdbg_print(1350, "WATCHDOG BARK!", 255, 0, 0, 0, 0, 0);
+	fwdbg_reboot_bootloader();
+#endif
 	msm_trigger_wdog_bite();
 	panic("Failed to cause a watchdog bite! - Falling back to kernel panic!");
 	return IRQ_HANDLED;

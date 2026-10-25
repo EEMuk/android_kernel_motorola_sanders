@@ -18,6 +18,7 @@
  */
 
 #include <linux/acpi.h>
+#include <linux/fwdbg.h>
 #include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/stddef.h>
@@ -272,6 +273,8 @@ void __init setup_arch(char **cmdline_p)
 
 	early_fixmap_init();
 	early_ioremap_init();
+	fwdbg_stage(0);
+	fwdbg_early_reason();
 
 	setup_machine_fdt(__fdt_pointer);
 

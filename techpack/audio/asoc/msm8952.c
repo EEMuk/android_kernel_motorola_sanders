@@ -117,6 +117,42 @@ static struct afe_clk_set mi2s_tx_clk = {
 	0,
 };
 
+/* Quinary MI2S drives a CS35L35 speaker amp (sanders, as on its 3.18 kernel) */
+static bool msm8952_quin_cs35l35;
+
+/* CS35L35 MCLK: LPASS MCLK_2 at 12.288 MHz, as the sanders 3.18 kernel did */
+static struct afe_clk_set cs35l35_mclk = {
+	AFE_API_VERSION_I2S_CONFIG,
+	Q6AFE_LPASS_CLK_ID_MCLK_2,
+	Q6AFE_LPASS_OSR_CLK_12_P288_MHZ,
+	Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
+	Q6AFE_LPASS_CLK_ROOT_DEFAULT,
+	0,
+};
+static DEFINE_MUTEX(cs35l35_mclk_mutex);
+static int cs35l35_mclk_ref;
+
+static int msm8952_cs35l35_mclk(bool enable)
+{
+	int ret = 0;
+
+	mutex_lock(&cs35l35_mclk_mutex);
+	if (enable ? cs35l35_mclk_ref++ == 0 :
+		     cs35l35_mclk_ref > 0 && --cs35l35_mclk_ref == 0) {
+		cs35l35_mclk.enable = enable;
+		ret = afe_set_lpass_clock_v2(AFE_PORT_ID_SECONDARY_MI2S_RX,
+					     &cs35l35_mclk);
+		if (ret < 0) {
+			pr_err("%s: cs35l35 mclk %s failed %d\n", __func__,
+			       enable ? "enable" : "disable", ret);
+			if (enable)
+				cs35l35_mclk_ref--;
+		}
+	}
+	mutex_unlock(&cs35l35_mclk_mutex);
+	return ret;
+}
+
 static struct afe_clk_set mi2s_rx_clk = {
 	AFE_API_VERSION_I2S_CONFIG,
 	Q6AFE_LPASS_CLK_ID_PRI_MI2S_IBIT,
@@ -1501,6 +1537,8 @@ static int msm_quin_mi2s_snd_startup(struct snd_pcm_substream *substream)
 			goto err;
 		}
 	}
+	if (msm8952_quin_cs35l35)
+		msm8952_cs35l35_mclk(true);
 	if (atomic_inc_return(&quin_mi2s_clk_ref) == 1) {
 		ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_CBS_CFS);
 		if (ret < 0)
@@ -1529,6 +1567,8 @@ static void msm_quin_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 		pr_err("%s:clock disable failed\n", __func__);
 	if (atomic_read(&quin_mi2s_clk_ref) > 0)
 		atomic_dec(&quin_mi2s_clk_ref);
+	if (msm8952_quin_cs35l35)
+		msm8952_cs35l35_mclk(false);
 	if (pdata->mi2s_gpio_p[QUIN_MI2S]) {
 		ret =  msm_cdc_pinctrl_select_sleep_state(
 			pdata->mi2s_gpio_p[QUIN_MI2S]);
@@ -2903,6 +2943,45 @@ static struct snd_soc_dai_link msm8952_quin_dai_link[] = {
 	},
 };
 
+static int msm8952_cs35l35_dai_init(struct snd_soc_pcm_runtime *rtd)
+{
+	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	int ret;
+
+	ret = snd_soc_codec_set_sysclk(codec_dai->codec, 0, 0,
+				       Q6AFE_LPASS_OSR_CLK_12_P288_MHZ,
+				       SND_SOC_CLOCK_IN);
+	if (ret < 0)
+		pr_err("%s: set codec sysclk failed %d\n", __func__, ret);
+	ret = snd_soc_dai_set_sysclk(codec_dai, 0,
+				     Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ,
+				     SND_SOC_CLOCK_IN);
+	if (ret < 0)
+		pr_err("%s: set dai sysclk failed %d\n", __func__, ret);
+	return 0;
+}
+
+static struct snd_soc_dai_link msm8952_cs35l35_quin_dai_link[] = {
+	{
+		.name = LPASS_BE_QUIN_MI2S_RX,
+		.stream_name = "Quinary MI2S Playback",
+		.cpu_dai_name = "msm-dai-q6-mi2s.4",
+		.platform_name = "msm-pcm-routing",
+		.codec_dai_name = "cs35l35-pcm",
+		.codec_name = "cs35l35.7-0040",
+		.init = msm8952_cs35l35_dai_init,
+		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+			   SND_SOC_DAIFMT_CBS_CFS,
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_QUINARY_MI2S_RX,
+		.be_hw_params_fixup = msm_mi2s_rx_be_hw_params_fixup,
+		.ops = &msm8952_quin_mi2s_be_ops,
+		.ignore_pmdown_time = 1, /* dai link has playback support */
+		.ignore_suspend = 1,
+	},
+};
+
 static struct snd_soc_dai_link msm8952_split_a2dp_dai_link[] = {
 	{
 		.name = LPASS_BE_INT_BT_A2DP_RX,
@@ -3269,9 +3348,19 @@ static struct snd_soc_card *msm8952_populate_sndcard_dailinks(
 		} else {
 			dev_dbg(dev, "%s(): No hdmi dba present, add quin dai\n",
 					__func__);
-			memcpy(dailink + len1, msm8952_quin_dai_link,
-					sizeof(msm8952_quin_dai_link));
-			len1 += ARRAY_SIZE(msm8952_quin_dai_link);
+			msm8952_quin_cs35l35 = of_property_read_bool(
+				dev->of_node, "qcom,cs35l35-quin-codec");
+			if (msm8952_quin_cs35l35) {
+				memcpy(dailink + len1,
+				       msm8952_cs35l35_quin_dai_link,
+				       sizeof(msm8952_cs35l35_quin_dai_link));
+				len1 += ARRAY_SIZE(
+					msm8952_cs35l35_quin_dai_link);
+			} else {
+				memcpy(dailink + len1, msm8952_quin_dai_link,
+				       sizeof(msm8952_quin_dai_link));
+				len1 += ARRAY_SIZE(msm8952_quin_dai_link);
+			}
 		}
 	}
 	if (of_property_read_bool(dev->of_node,

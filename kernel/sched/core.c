@@ -79,6 +79,7 @@
 #include <linux/cpufreq_times.h>
 #include <linux/sched/loadavg.h>
 #include <linux/cgroup-defs.h>
+#include <linux/fwdbg.h>
 
 #include <asm/switch_to.h>
 #include <asm/tlb.h>
@@ -8229,11 +8230,15 @@ void __init sched_init(void)
 	int i, j;
 	unsigned long alloc_size = 0, ptr;
 
+	fwdbg_paint(140, 255, 0, 0); /* 1: RED - entered sched_init */
+
 	for (i = 0; i < WAIT_TABLE_SIZE; i++)
 		init_waitqueue_head(bit_wait_table + i);
 
 	sched_boost_parse_dt();
 	init_clusters();
+
+	fwdbg_paint(180, 255, 128, 0); /* 2: ORANGE - clusters initialized */
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	alloc_size += 2 * nr_cpu_ids * sizeof(void **);
@@ -8278,6 +8283,8 @@ void __init sched_init(void)
 #ifdef CONFIG_SMP
 	init_defrootdomain();
 #endif
+
+	fwdbg_paint(220, 255, 0, 255); /* 3: MAGENTA - defrootdomain initialized */
 
 #ifdef CONFIG_RT_GROUP_SCHED
 	init_rt_bandwidth(&root_task_group.rt_bandwidth,
@@ -8370,8 +8377,12 @@ void __init sched_init(void)
 		atomic_set(&rq->nr_iowait, 0);
 	}
 
+	fwdbg_paint(260, 0, 255, 255); /* 4: CYAN - cpu loop finished */
+
 	i = alloc_related_thread_groups();
 	BUG_ON(i);
+
+	fwdbg_paint(300, 255, 255, 255); /* 5: WHITE - related thread groups allocated */
 
 	set_load_weight(&init_task);
 
@@ -8388,7 +8399,12 @@ void __init sched_init(void)
 	 * when this runqueue becomes "idle".
 	 */
 	init_idle(current, smp_processor_id());
+
+	fwdbg_paint(340, 0, 255, 0); /* 6: GREEN - idle thread initialized */
+
 	init_new_task_load(current);
+
+	fwdbg_paint(380, 255, 255, 0); /* 7: YELLOW - new task load initialized */
 
 	calc_load_update = jiffies + LOAD_FREQ;
 
@@ -8405,6 +8421,8 @@ void __init sched_init(void)
 	init_schedstats();
 
 	psi_init();
+
+	fwdbg_paint(420, 255, 128, 0); /* 8: ORANGE - sched_init done */
 
 	scheduler_running = 1;
 }

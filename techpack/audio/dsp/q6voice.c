@@ -4404,6 +4404,18 @@ static int voice_setup_vocproc(struct voice_data *v)
 		common.cvp_version = voice_get_avcs_version_per_service(
 				     APRV2_IDS_SERVICE_ID_ADSP_CVP_V);
 
+	/*
+	 * ADSP firmware that predates AVCS service versioning (sanders ships
+	 * 3.18-era firmware) rejects the query with -EOPNOTSUPP: that is the
+	 * legacy CVP API, which the CVP_VERSION_2 checks below already handle.
+	 */
+	if (common.cvp_version == -EOPNOTSUPP) {
+		pr_info("%s: no AVCS version support, using legacy CVP API\n",
+			__func__);
+		common.cvp_version = 0;
+		common.is_avcs_version_queried = true;
+	}
+
 	if (common.cvp_version < 0) {
 		pr_err("%s: Invalid CVP version %d\n",
 		       __func__, common.cvp_version);

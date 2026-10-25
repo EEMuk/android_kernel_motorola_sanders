@@ -1,5 +1,13 @@
 menu "printk and dmesg options"
 
+config FWDBG_STRIPES
+	bool "Boot progress stripes on the bootloader splash framebuffer"
+	depends on ARM64
+	help
+	  Paint one band per boot stage into the msm8953 bootloader's
+	  continuous-splash framebuffer, for bring-up without a serial
+	  console. Debug only.
+
 config PRINTK_TIME
 	bool "Show timing information on printks"
 	depends on PRINTK

@@ -70,6 +70,10 @@ source "drivers/nfc/st-nci/Kconfig"
 source "drivers/nfc/nxp-nci/Kconfig"
 source "drivers/nfc/s3fwrn5/Kconfig"
 source "drivers/nfc/st95hf/Kconfig"
+endmenu
+
+# A plain /dev/pn544 char device for the vendor NFC HAL: it needs I2C only,
+# not the kernel NFC stack, so it lives outside the "depends on NFC" menu.
 config PN544
 	bool "PN544 NFC driver (Motorola)"
 	depends on I2C
@@ -78,7 +82,6 @@ config PN544
 	  NXP PN544 NFC controller, Motorola driver (/dev/pn544) as used by
 	  the Moto G5S Plus (sanders).
 
-endmenu
 
 config NFC_NQ
         tristate "QTI NCI based NFC Controller Driver for NQx"

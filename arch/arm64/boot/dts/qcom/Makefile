@@ -796,9 +796,12 @@ dtb-$(CONFIG_ARCH_SDM429) += sdm429-mtp.dtb \
 endif
 endif  #CONFIG_MMI_DEVICE_DTBS
 
-# Motorola Moto G5S Plus (sanders): one full dtb for all board revisions
+# Motorola Moto G5S Plus (sanders): separate dtbs matching stock Motorola layout
 # (the bootloader selects it from the QCDT table by board-id)
-dtb-$(CONFIG_ARCH_MSM8953) += msm8953-sanders.dtb
+dtb-$(CONFIG_ARCH_MSM8953) += msm8953-sanders-p1.dtb \
+			msm8953-sanders-p2.dtb \
+			msm8953-sanders-p3.dtb \
+			msm8953-sanders-p4.dtb
 
 dtb-$(CONFIG_ARCH_SDM845_VM) += sdm845-vm.dtb
 

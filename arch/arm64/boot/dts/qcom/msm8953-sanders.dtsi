@@ -39,6 +39,10 @@
 #include "carrier-channel-ids.dtsi"
 
 / {
+	chosen {
+		/delete-property/ bootargs;
+	};
+
 	aliases {
 		i2c7 = &i2c_7;
 		spi8 = &spi_8;
@@ -57,12 +61,13 @@
 			no-map;
 			reg = <0x0 0xef000000 0x0 0x80000>;
 			/*
-			 * Same console offset as the 3.18 kernel (one dump record,
-			 * then the console at +0x40000), so a 3.18 boot can read
-			 * the console of a crashed 4.9 boot from pstore.
+			 * Same layout as the 3.18 kernel (dump +0x0, console
+			 * +0x20000, then annotate/pmsg +0x60000), so a 3.18 boot
+			 * can read the console of a crashed 4.9 boot from pstore.
 			 */
+			record-size = <0x20000>;
 			console-size = <0x40000>;
-			record-size = <0x40000>;
+			pmsg-size = <0x20000>;
 		};
 
 		tzlog_bck_mem: tzlog_bck_region@eefe4000 {
@@ -94,19 +99,21 @@
 
 /*
  * Android early-mount fstab from 3.18 (sanders has no vendor partition;
- * "oem" was mounted as /vendor). Disabled: Halium mounts system/vendor
- * itself. Set status = "ok" for a plain Android boot.
+ * "oem" was mounted as /vendor). Motorola LK's update_fstab_node() checks
+ * and updates these nodes; disabling them causes LK to ASSERT(0) on boot.
  */
 &firmware {
 	android {
 		fstab {
+			compatible = "android,fstab";
+
 			system {
 				compatible = "android,system";
 				dev = "/dev/block/platform/soc/7824900.sdhci/by-name/system";
 				type = "ext4";
 				mnt_flags = "ro,barrier=1,discard";
 				fsmgr_flags = "wait,verify";
-				status = "disabled";
+				status = "ok";
 			};
 
 			vendor {
@@ -115,7 +122,7 @@
 				type = "ext4";
 				mnt_flags = "ro,barrier=1,discard";
 				fsmgr_flags = "wait,verify";
-				status = "disabled";
+				status = "ok";
 			};
 		};
 	};
@@ -344,14 +351,14 @@
  * 3.18 switched pins through qcom,msm-gpios/pinctrl tables in the sound
  * node. The 4.9 msm8952 machine driver uses msm-cdc-pinctrl nodes, so the
  * cs35l35 MCLK pin (gpio25) is muxed together with the QUIN MI2S lines.
- *
- * TODO (driver): the 4.9 msm8952.c quin MI2S BE link uses the dummy
- * codec; a cs35l35 link (codec "cs35l35.<bus>-0040", dai "cs35l35-pcm")
- * and the SEC MI2S MCLK enable have to be added there.
+ * qcom,cs35l35-quin-codec makes the quinary MI2S BE link use the cs35l35
+ * (codec "cs35l35.7-0040", dai "cs35l35-pcm") and enable its MCLK.
  */
 &int_codec {
 	qcom,model = "msm8953-snd-card";
 	qcom,msm-ext-pa = "quinary";
+	/* quinary MI2S BE uses the CS35L35 as codec (msm8952-dai-links.c) */
+	qcom,cs35l35-quin-codec;
 	qcom,msm-mbhc-hphl-swh = <1>;
 	qcom,msm-mbhc-gnd-swh = <0>;
 	qcom,msm-hs-micbias-type = "internal";
@@ -758,4 +765,110 @@
 
 &mdss_dsi1 {
 	status = "disabled";
+};
+
+/*
+ * sanders has no WCD9335: audio is a Cirrus "marley" codec on SLIMbus
+ * (TODO: port it), the PM8953 analog codec and the CS35L35 amplifier.
+ * Of the MTP codec GPIO groups in msm8953-audio.dtsi, sanders (as on 3.18)
+ * uses the PDM, PDM comp and pri_tlmm (quinary MI2S, CS35L35) lines; the
+ * others do not exist on sanders, and setting their sleep state resets the
+ * phone at boot.
+ */
+&wcd9335 {
+	status = "disabled";
+};
+
+&ext_codec {
+	status = "disabled";
+};
+
+&cdc_us_euro_sw {
+	status = "disabled";
+};
+
+&wsa881x_analog_vi_gpio {
+	status = "disabled";
+};
+
+&wsa881x_analog_clk_gpio {
+	status = "disabled";
+};
+
+&wsa881x_analog_reset_gpio {
+	status = "disabled";
+};
+
+/*
+ * IPC router SMD transports, as on 3.18. Without these nodes 4.9 falls back
+ * to a built-in table without qcom,disable-pil-loading: its probe then calls
+ * subsystem_get("modem") while the modem is booting and waiting for this
+ * very channel, and the modem watchdog fires ("stalled initialization").
+ * WCNSS/ADSP get it too: their drivers start them, and SMD probes run one
+ * at a time, so a WCNSS probe waiting for wlan.ko would block the modem's.
+ */
+&soc {
+	qcom,ipc_router_modem_xprt {
+		compatible = "qcom,ipc_router_smd_xprt";
+		qcom,ch-name = "IPCRTR";
+		qcom,xprt-remote = "modem";
+		qcom,xprt-linkid = <0x01>;
+		qcom,xprt-version = <0x01>;
+		qcom,fragmented-data;
+		qcom,disable-pil-loading;
+	};
+	qcom,ipc_router_q6_xprt {
+		compatible = "qcom,ipc_router_smd_xprt";
+		qcom,ch-name = "IPCRTR";
+		qcom,xprt-remote = "adsp";
+		qcom,xprt-linkid = <0x01>;
+		qcom,xprt-version = <0x01>;
+		qcom,fragmented-data;
+		qcom,disable-pil-loading;
+	};
+	qcom,ipc_router_wcnss_xprt {
+		compatible = "qcom,ipc_router_smd_xprt";
+		qcom,ch-name = "IPCRTR";
+		qcom,xprt-remote = "wcnss";
+		qcom,xprt-linkid = <0x01>;
+		qcom,xprt-version = <0x01>;
+		qcom,fragmented-data;
+		qcom,disable-pil-loading;
+	};
+};
+
+/*
+ * As on 3.18: Motorola's LK has already registered the secure app region
+ * with TZ, and it does not load commonlib64. Without this the QSEECom probe
+ * fails ("send secapp reg fail", scm ret -8), /dev/qseecom is missing and
+ * keymaster/gatekeeper crash-loop.
+ */
+&qcom_seecom {
+	qcom,appsbl-qseecom-support;
+	/delete-property/ qcom,commonlib64-loaded-by-uefi;
+};
+
+/*
+ * The CS35L35 gets its I2S data on gpio88 as well: the sanders 3.18 pin
+ * states mux gpio88 with gpio91/93, the msm8953 defaults do not, and the
+ * amp then plays silence.
+ */
+&pri_tlmm_lines_act {
+	mux {
+		pins = "gpio91", "gpio93", "gpio88";
+	};
+
+	config {
+		pins = "gpio91", "gpio93", "gpio88";
+	};
+};
+
+&pri_tlmm_lines_sus {
+	mux {
+		pins = "gpio91", "gpio93", "gpio88";
+	};
+
+	config {
+		pins = "gpio91", "gpio93", "gpio88";
+	};
 };

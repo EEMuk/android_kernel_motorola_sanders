@@ -19,6 +19,7 @@
 #include <linux/of_gpio.h>
 #include <linux/regulator/consumer.h>
 #include <linux/platform_device.h>
+#include <linux/spi/spi.h>
 #include <linux/notifier.h>
 
 #define RESET_LOW_SLEEP_MIN_US 5000
@@ -121,7 +122,6 @@ struct fpc1020_data {
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	struct device *class_dev;
 #endif
-	struct platform_device *pdev;
 	struct notifier_block nb;
 	int irq_gpio;
 	int irq_num;
@@ -333,9 +333,8 @@ ALLOC_REGION:
 }
 #endif
 
-static int fpc1020_probe(struct platform_device *pdev)
+static int fpc1020_probe_dev(struct device *dev)
 {
-	struct device *dev = &pdev->dev;
 	int rc = 0;
 	int irqf;
 	struct device_node *np = dev->of_node;
@@ -350,7 +349,6 @@ static int fpc1020_probe(struct platform_device *pdev)
 
 	fpc1020->dev = dev;
 	dev_set_drvdata(dev, fpc1020);
-	fpc1020->pdev = pdev;
 
 	if (!np) {
 		dev_err(dev, "no of node found\n");
@@ -416,20 +414,20 @@ irq_exit:
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	fpc1020_create_sysfs(fpc1020, false);
 #else
-	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
+	sysfs_remove_group(&dev->kobj, &attribute_group);
 #endif
 exit:
 	return rc;
 }
 
-static int fpc1020_remove(struct platform_device *pdev)
+static int fpc1020_remove_dev(struct device *dev)
 {
-	struct  fpc1020_data *fpc1020 = dev_get_drvdata(&pdev->dev);
+	struct  fpc1020_data *fpc1020 = dev_get_drvdata(dev);
 
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	fpc1020_create_sysfs(fpc1020, false);
 #else
-	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
+	sysfs_remove_group(&dev->kobj, &attribute_group);
 #endif
 
 	device_init_wakeup(fpc1020->dev, false);
@@ -437,7 +435,7 @@ static int fpc1020_remove(struct platform_device *pdev)
 	if (gpio_is_valid(fpc1020->irq_gpio)) {
 		gpio_free(fpc1020->irq_gpio);
 	}
-	dev_info(&pdev->dev, "%s\n", __func__);
+	dev_info(dev, "%s\n", __func__);
 	return 0;
 }
 
@@ -462,6 +460,45 @@ static const struct of_device_id fpc1020_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, fpc1020_of_match);
 
+static int fpc1020_probe(struct platform_device *pdev)
+{
+	return fpc1020_probe_dev(&pdev->dev);
+}
+
+static int fpc1020_remove(struct platform_device *pdev)
+{
+	return fpc1020_remove_dev(&pdev->dev);
+}
+
+/*
+ * As on the sanders 3.18 kernel, the sensor is an SPI device: the Motorola
+ * FPC HAL scans /sys/bus/spi/devices for modalias "fpc1020" and uses the
+ * sysfs attributes there. The platform driver stays for boards
+ * that put the node under &soc.
+ */
+static int fpc1020_spi_probe(struct spi_device *spi)
+{
+	return fpc1020_probe_dev(&spi->dev);
+}
+
+static int fpc1020_spi_remove(struct spi_device *spi)
+{
+	return fpc1020_remove_dev(&spi->dev);
+}
+
+static struct spi_driver fpc1020_spi_driver = {
+	.driver = {
+		.name	= "fpc1020",
+		.owner	= THIS_MODULE,
+		.of_match_table = fpc1020_of_match,
+#if defined(CONFIG_PM)
+		.pm = &fpc1020_pm_ops,
+#endif
+	},
+	.probe		= fpc1020_spi_probe,
+	.remove		= fpc1020_spi_remove,
+};
+
 static struct platform_driver fpc1020_driver = {
 	.driver = {
 		.name	= "fpc1020",
@@ -475,10 +512,67 @@ static struct platform_driver fpc1020_driver = {
 	.remove		= fpc1020_remove,
 };
 
+/*
+ * The sensor's real SPI bus (BLSP2 QUP4) belongs to TZ: on 4.9 even probing
+ * that controller from Linux resets the SoC. Linux never transfers on it,
+ * so a software-only SPI master stands in for it and carries the sensor as
+ * spi8.0, where the HAL looks for it.
+ */
+static int fpc1020_stub_transfer(struct spi_master *master,
+				 struct spi_message *msg)
+{
+	msg->status = -EIO;
+	spi_finalize_current_message(master);
+	return -EIO;
+}
+
+static int fpc1020_spi_stub_probe(struct platform_device *pdev)
+{
+	struct spi_master *master;
+	int rc;
+
+	master = spi_alloc_master(&pdev->dev, 0);
+	if (!master)
+		return -ENOMEM;
+	master->dev.of_node = pdev->dev.of_node;
+	master->bus_num = 8;
+	master->num_chipselect = 1;
+	master->transfer_one_message = fpc1020_stub_transfer;
+	rc = devm_spi_register_master(&pdev->dev, master);
+	if (rc)
+		spi_master_put(master);
+	return rc;
+}
+
+static const struct of_device_id fpc1020_spi_stub_of_match[] = {
+	{ .compatible = "fpc,fpc1020-spi-stub", },
+	{}
+};
+
+static struct platform_driver fpc1020_spi_stub_driver = {
+	.driver = {
+		.name	= "fpc1020-spi-stub",
+		.of_match_table = fpc1020_spi_stub_of_match,
+	},
+	.probe		= fpc1020_spi_stub_probe,
+};
+
 static int __init fpc1020_init(void)
 {
 	int rc = platform_driver_register(&fpc1020_driver);
 
+	if (!rc) {
+		rc = spi_register_driver(&fpc1020_spi_driver);
+		if (rc)
+			platform_driver_unregister(&fpc1020_driver);
+	}
+	if (!rc) {
+		rc = platform_driver_register(&fpc1020_spi_stub_driver);
+		if (rc) {
+			spi_unregister_driver(&fpc1020_spi_driver);
+			platform_driver_unregister(&fpc1020_driver);
+		}
+	}
 	if (!rc)
 		pr_debug("%s OK\n", __func__);
 	else
@@ -489,6 +583,8 @@ static int __init fpc1020_init(void)
 static void __exit fpc1020_exit(void)
 {
 	pr_debug("%s\n", __func__);
+	platform_driver_unregister(&fpc1020_spi_stub_driver);
+	spi_unregister_driver(&fpc1020_spi_driver);
 	platform_driver_unregister(&fpc1020_driver);
 }
 

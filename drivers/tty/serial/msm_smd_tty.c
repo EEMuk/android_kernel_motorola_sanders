@@ -18,6 +18,7 @@
 #include <linux/device.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
+#include <linux/wcnss_wlan.h>
 #include <linux/pm.h>
 #include <linux/platform_device.h>
 #include <linux/sched.h>
@@ -517,6 +518,19 @@ static int smd_tty_port_activate(struct tty_port *tport,
 		SMD_TTY_ERR("%s:%d Idx smd_tty_driver register failed %d\n",
 							__func__, n, res);
 		goto out;
+	}
+
+	/*
+	 * Bluetooth opens its WCNSS ports early. Powering WCNSS from here
+	 * before /dev/wcnss_wlan has configured it (hardware type, regulators)
+	 * leaves the IRIS RF unpowered and WLAN fails to start, so let the
+	 * WLAN side bring it up first (bounded wait).
+	 */
+	if (smd_tty[n].edge == SMD_APPS_WCNSS) {
+		int i;
+
+		for (i = 0; i < 100 && !wcnss_device_ready(); i++)
+			msleep(100);
 	}
 
 	peripheral = smd_edge_to_pil_str(smd_tty[n].edge);
