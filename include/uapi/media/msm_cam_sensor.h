@@ -88,7 +88,6 @@ enum sensor_sub_module_t {
 	SUB_MODULE_EXT,
 	SUB_MODULE_IR_LED,
 	SUB_MODULE_IR_CUT,
-	SUB_MODULE_LASER_LED,
 	SUB_MODULE_MAX,
 };
 
@@ -177,6 +176,18 @@ enum cci_i2c_master_t {
 	MASTER_MAX,
 };
 
+enum flash_position {
+	REAR_FLASH,
+	FRONT_FLASH,
+	INVALID_FLASH,
+};
+
+enum mux_sel_option {
+	NO_MUX_SEL,
+	USE_MUX_SEL,
+	INVALID_MUX_SEL,
+};
+
 struct msm_camera_i2c_array_write_config {
 	struct msm_camera_i2c_reg_setting conf_array;
 	uint16_t slave_addr;
@@ -218,6 +229,7 @@ struct msm_sensor_info_t {
 	uint32_t sensor_mount_angle;
 	int modes_supported;
 	enum camb_position_t position;
+	int is_rear_prox_interfering;
 };
 
 struct camera_vreg_t {
@@ -264,6 +276,7 @@ enum eeprom_cfg_type_t {
 	CFG_EEPROM_WRITE_DATA,
 	CFG_EEPROM_GET_MM_INFO,
 	CFG_EEPROM_INIT,
+	CFG_EEPROM_REINIT,
 };
 
 struct eeprom_get_t {
@@ -428,6 +441,11 @@ struct msm_actuator_move_params_t {
 	struct damping_params_t __user *ringing_params;
 };
 
+struct msm_mot_actuator_tuning_params_t {
+	int16_t infinity_dac;
+	int16_t macro_dac;
+};
+
 struct msm_actuator_tuning_params_t {
 	int16_t initial_code;
 	uint16_t pwd_step;
@@ -470,6 +488,7 @@ struct msm_actuator_params_t {
 struct msm_actuator_set_info_t {
 	struct msm_actuator_params_t actuator_params;
 	struct msm_actuator_tuning_params_t af_tuning_params;
+	struct msm_mot_actuator_tuning_params_t mot_af_tuning_params;
 };
 
 struct msm_actuator_get_info_t {
@@ -571,9 +590,12 @@ struct msm_flash_cfg_data_t {
 	enum msm_flash_cfg_type_t cfg_type;
 	int32_t flash_current[MAX_LED_TRIGGERS];
 	int32_t flash_duration[MAX_LED_TRIGGERS];
+	enum flash_position position;
+	enum mux_sel_option mux_sel;
 	union {
 		struct msm_flash_init_info_t *flash_init_info;
 		struct msm_camera_i2c_reg_setting_array __user *settings;
+		struct msm_camera_i2c_read_config *read_config;
 	} cfg;
 };
 

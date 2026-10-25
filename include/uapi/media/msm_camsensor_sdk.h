@@ -45,7 +45,7 @@
 
 #define MAX_LED_TRIGGERS          3
 
-#define MSM_EEPROM_MEMORY_MAP_MAX_SIZE  80
+#define MSM_EEPROM_MEMORY_MAP_MAX_SIZE  100
 #define MSM_EEPROM_MAX_MEM_MAP_CNT      8
 
 #define MSM_SENSOR_BYPASS_VIDEO_NODE    1
@@ -157,6 +157,13 @@ enum camerab_mode_t {
 enum msm_actuator_data_type {
 	MSM_ACTUATOR_BYTE_DATA = 1,
 	MSM_ACTUATOR_WORD_DATA,
+	MSM_ACTUATOR_DWORD_DATA,
+	MSM_ACTUATOR_SET_BYTE_MASK,
+	MSM_ACTUATOR_UNSET_BYTE_MASK,
+	MSM_ACTUATOR_SET_WORD_MASK,
+	MSM_ACTUATOR_UNSET_WORD_MASK,
+	MSM_ACTUATOR_SET_BYTE_WRITE_MASK_DATA,
+	MSM_ACTUATOR_DATA_TYPE_MAX,
 };
 
 enum msm_actuator_addr_type {
@@ -171,11 +178,13 @@ enum msm_actuator_write_type {
 	MSM_ACTUATOR_WRITE_DIR_REG,
 	MSM_ACTUATOR_POLL,
 	MSM_ACTUATOR_READ_WRITE,
+	MSM_ACTUATOR_WRITE_REG,
 };
 
 enum msm_actuator_i2c_operation {
 	MSM_ACT_WRITE = 0,
 	MSM_ACT_POLL,
+	MSM_ACT_READ_SET,
 };
 
 enum actuator_type {
@@ -183,6 +192,7 @@ enum actuator_type {
 	ACTUATOR_PIEZO,
 	ACTUATOR_HVCM,
 	ACTUATOR_BIVCM,
+	ACTUATOR_MOT_HVCM,
 };
 
 enum msm_flash_driver_type {
@@ -198,6 +208,8 @@ enum msm_flash_cfg_type_t {
 	CFG_FLASH_OFF,
 	CFG_FLASH_LOW,
 	CFG_FLASH_HIGH,
+	CFG_FLASH_READ_I2C,
+	CFG_FLASH_WRITE_I2C,
 };
 
 enum msm_ir_led_cfg_type_t {
@@ -256,9 +268,10 @@ enum msm_camera_i2c_operation {
 	MSM_CAM_WRITE = 0,
 	MSM_CAM_POLL,
 	MSM_CAM_READ,
+	MSM_CAM_POLL_STRICT,
 #define MSM_CAM_READ_LOOP \
 	MSM_CAM_READ_LOOP
-	MSM_CAM_READ_LOOP = 3,
+	MSM_CAM_READ_LOOP = 4,
 	MSM_CAM_READ_PAGE,
 	MSM_CAM_WRITE_DELAYUSEC,
 	MSM_CAM_READ_CONTINUOUS,
@@ -312,8 +325,10 @@ struct msm_camera_i2c_reg_setting {
 struct msm_sensor_id_info_t {
 	unsigned short sensor_id_reg_addr;
 	unsigned short sensor_id;
+	unsigned short sensor_id2;
 	unsigned short sensor_id_mask;
-	struct msm_camera_i2c_reg_setting setting;
+	unsigned short sensor_model_id_reg_addr;
+	unsigned short sensor_model_id;
 };
 
 struct msm_camera_sensor_slave_info {
@@ -378,7 +393,6 @@ struct msm_camera_csiphy_params {
 	unsigned char csid_core;
 	unsigned int csiphy_clk;
 	unsigned char csi_3phase;
-	uint64_t data_rate;
 };
 
 struct msm_camera_i2c_seq_reg_array {
@@ -430,6 +444,7 @@ struct reg_settings_t {
 	enum msm_camera_i2c_data_type data_type;
 	enum msm_actuator_i2c_operation i2c_operation;
 	unsigned int delay;
+	unsigned short eeprom_offset;
 };
 
 struct msm_camera_i2c_reg_setting_array {

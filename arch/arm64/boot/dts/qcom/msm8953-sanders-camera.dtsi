@@ -87,8 +87,8 @@
 		qcom,cam-vreg-op-mode = <100000 100000>;
 		pinctrl-names = "cam_default", "cam_suspend";
 		pinctrl-0 = <&cam_sensor_mclk0_default
-				&cam_sensor_rear_default>;
-		pinctrl-1 = <&cam_sensor_mclk0_sleep &cam_sensor_rear_sleep>;
+				&cam_sensor_rear0_default>;
+		pinctrl-1 = <&cam_sensor_mclk0_sleep &cam_sensor_rear0_sleep>;
 		gpios = <&tlmm 26 0>,
 			<&tlmm 39 0>,
 			<&tlmm 89 0>,
@@ -124,8 +124,8 @@
 		qcom,gpio-no-mux = <0>;
 		pinctrl-names = "cam_default", "cam_suspend";
 		pinctrl-0 = <&cam_sensor_mclk1_default
-				&cam_sensor_rear_default>;
-		pinctrl-1 = <&cam_sensor_mclk1_sleep &cam_sensor_rear_sleep>;
+				&cam_sensor_rear1_default>;
+		pinctrl-1 = <&cam_sensor_mclk1_sleep &cam_sensor_rear1_sleep>;
 		gpios = <&tlmm 27 0>,
 			<&tlmm 41 0>,
 			<&tlmm 89 0>,
@@ -206,8 +206,8 @@
 		qcom,cam-vreg-op-mode = <105000 100000 100000>;
 		pinctrl-names = "cam_default", "cam_suspend";
 		pinctrl-0 = <&cam_sensor_mclk0_default
-				&cam_sensor_rear_default>;
-		pinctrl-1 = <&cam_sensor_mclk0_sleep &cam_sensor_rear_sleep>;
+				&cam_sensor_rear0_default>;
+		pinctrl-1 = <&cam_sensor_mclk0_sleep &cam_sensor_rear0_sleep>;
 		gpios = <&tlmm 26 0>,
 			<&tlmm 39 0>,
 			<&tlmm 89 0>,
@@ -250,8 +250,8 @@
 		qcom,cam-vreg-op-mode = <105000 100000 100000>;
 		pinctrl-names = "cam_default", "cam_suspend";
 		pinctrl-0 = <&cam_sensor_mclk1_default
-				&cam_sensor_rear_default>;
-		pinctrl-1 = <&cam_sensor_mclk1_sleep &cam_sensor_rear_sleep>;
+				&cam_sensor_rear1_default>;
+		pinctrl-1 = <&cam_sensor_mclk1_sleep &cam_sensor_rear1_sleep>;
 		gpios = <&tlmm 27 0>,
 			<&tlmm 41 0>,
 			<&tlmm 89 0>,
@@ -322,42 +322,71 @@
 
 };
 
-&cam_sensor_rear_default {
-	/* RESET0, RESET1, VIO, VANA0, VANA1 */
-	mux {
-		pins = "gpio39", "gpio41", "gpio89", "gpio128", "gpio50";
-		function = "gpio";
+&tlmm {
+	cam_sensor_rear0_default: cam_sensor_rear0_default {
+		/* RESET0, VANA0 */
+		mux {
+			pins = "gpio39", "gpio128";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio39", "gpio128";
+			bias-disable;
+			drive-strength = <2>;
+		};
 	};
 
-	config {
-		pins = "gpio39", "gpio41", "gpio89", "gpio128", "gpio50";
-		bias-disable;
-		drive-strength = <2>;
-	};
-};
+	cam_sensor_rear0_sleep: cam_sensor_rear0_sleep {
+		mux {
+			pins = "gpio39", "gpio128";
+			function = "gpio";
+		};
 
-&cam_sensor_rear_sleep {
-	mux {
-		pins = "gpio39", "gpio41", "gpio89", "gpio128", "gpio50";
-		function = "gpio";
+		config {
+			pins = "gpio39", "gpio128";
+			bias-disable;
+			drive-strength = <2>;
+		};
 	};
 
-	config {
-		pins = "gpio39", "gpio41", "gpio89", "gpio128", "gpio50";
-		bias-disable;
-		drive-strength = <2>;
+	cam_sensor_rear1_default: cam_sensor_rear1_default {
+		/* RESET1, VANA1 */
+		mux {
+			pins = "gpio41", "gpio50";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio41", "gpio50";
+			bias-disable;
+			drive-strength = <2>;
+		};
+	};
+
+	cam_sensor_rear1_sleep: cam_sensor_rear1_sleep {
+		mux {
+			pins = "gpio41", "gpio50";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio41", "gpio50";
+			bias-disable;
+			drive-strength = <2>;
+		};
 	};
 };
 
 &cam_sensor_front_default {
-	/* VIO, VANA, STANDBY */
+	/* VANA, STANDBY */
 	mux {
-		pins = "gpio35", "gpio89", "gpio130";
+		pins = "gpio35", "gpio130";
 		function = "gpio";
 	};
 
 	config {
-		pins = "gpio35", "gpio89", "gpio130";
+		pins = "gpio35", "gpio130";
 		bias-disable;
 		drive-strength = <2>;
 	};
@@ -365,12 +394,12 @@
 
 &cam_sensor_front_sleep {
 	mux {
-		pins = "gpio35", "gpio89", "gpio130";
+		pins = "gpio35", "gpio130";
 		function = "gpio";
 	};
 
 	config {
-		pins = "gpio35", "gpio89", "gpio130";
+		pins = "gpio35", "gpio130";
 		bias-disable;
 		drive-strength = <2>;
 	};
