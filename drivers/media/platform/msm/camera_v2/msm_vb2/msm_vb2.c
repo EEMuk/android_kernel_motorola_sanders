@@ -103,6 +103,7 @@ static void msm_vb2_buf_queue(struct vb2_buffer *vb)
 	}
 
 	spin_lock_irqsave(&stream->stream_lock, flags);
+	msm_vb2->in_freeq = 0;
 	list_add_tail(&msm_vb2->list, &stream->queued_list);
 	spin_unlock_irqrestore(&stream->stream_lock, flags);
 	read_unlock_irqrestore(&session->stream_rwlock, rl_flags);
@@ -298,6 +299,8 @@ static struct vb2_v4l2_buffer *msm_vb2_get_buf(int session_id,
 	}
 	msm_vb2 = NULL;
 	vb2_v4l2_buf = NULL;
+	pr_err_ratelimited("%s: No free buf in stream %u ses %d\n",
+		__func__, stream_id, session_id);
 end:
 	spin_unlock_irqrestore(&stream->stream_lock, flags);
 	read_unlock_irqrestore(&session->stream_rwlock, rl_flags);
@@ -344,6 +347,8 @@ static struct vb2_v4l2_buffer *msm_vb2_get_buf_by_idx(int session_id,
 	}
 	msm_vb2 = NULL;
 	vb2_v4l2_buf = NULL;
+	pr_err_ratelimited("%s: No free buf idx %u in stream %u ses %d\n",
+		__func__, index, stream_id, session_id);
 end:
 	spin_unlock_irqrestore(&stream->stream_lock, flags);
 	read_unlock_irqrestore(&session->stream_rwlock, rl_flags);

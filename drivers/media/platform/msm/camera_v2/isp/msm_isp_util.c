@@ -364,6 +364,34 @@ int msm_isp_unsubscribe_event(struct v4l2_subdev *sd, struct v4l2_fh *fh,
 	return msm_isp_process_event_subscription(fh, sub, false);
 }
 
+static int msm_isp_update_fe_frame_id(struct vfe_device *vfe_dev,
+	void *arg)
+{
+	struct msm_vfe_update_fe_frame_id *session_frameid = arg;
+	int rc = 0;
+	/*
+	 * For Offline VFE, HAL expects same frame id
+	 * for offline output which it requested in do_reprocess.
+	 */
+	vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id =
+		   session_frameid->frame_id;
+	return rc;
+}
+
+static int msm_isp_restart_fe(struct vfe_device *vfe_dev,
+	void *arg)
+{
+	struct msm_vfe_restart_fe_cmd *rst_fe = arg;
+	int rc = 0;
+	/*
+	 * In case of overflow recovery
+	 * restart fetch engine
+	 */
+	if (rst_fe->restart_fe)
+		vfe_dev->fetch_engine_info.is_busy = 1;
+	return rc;
+}
+
 static int msm_isp_start_fetch_engine(struct vfe_device *vfe_dev,
 	void *arg)
 {
@@ -904,6 +932,23 @@ static long msm_isp_ioctl_unlocked(struct v4l2_subdev *sd,
 		MSM_ISP_DUAL_VFE_MUTEX_UNLOCK(vfe_dev);
 		mutex_unlock(&vfe_dev->core_mutex);
 		break;
+	case VIDIOC_MSM_ISP_CFG_HW_STATE: {
+		struct msm_vfe_axi_stream_cfg_cmd *stream_cfg_cmd = arg;
+		enum msm_vfe_hw_state hw_state = stream_cfg_cmd ?
+			stream_cfg_cmd->hw_state : HW_STATE_NONE;
+		mutex_lock(&vfe_dev->core_mutex);
+		if (hw_state == HW_STATE_SLEEP) {
+			rc = msm_isp_update_bandwidth(
+				ISP_VFE0 + vfe_dev->pdev->id, 0, 0);
+		} else {
+			rc = msm_isp_update_bandwidth(
+				ISP_VFE0 + vfe_dev->pdev->id,
+				vfe_dev->total_bandwidth + vfe_dev->hw_info->min_ab,
+				vfe_dev->total_bandwidth + vfe_dev->hw_info->min_ib);
+		}
+		mutex_unlock(&vfe_dev->core_mutex);
+		break;
+	}
 	case VIDIOC_MSM_ISP_AXI_HALT:
 		mutex_lock(&vfe_dev->core_mutex);
 		MSM_ISP_DUAL_VFE_MUTEX_LOCK(vfe_dev);
@@ -985,6 +1030,16 @@ static long msm_isp_ioctl_unlocked(struct v4l2_subdev *sd,
 	case VIDIOC_MSM_ISP_MAP_BUF_START_MULTI_PASS_FE:
 		mutex_lock(&vfe_dev->core_mutex);
 		rc = msm_isp_start_fetch_engine_multi_pass(vfe_dev, arg);
+		mutex_unlock(&vfe_dev->core_mutex);
+		break;
+	case VIDIOC_MSM_ISP_RESTART_FE:
+		mutex_lock(&vfe_dev->core_mutex);
+		rc = msm_isp_restart_fe(vfe_dev, arg);
+		mutex_unlock(&vfe_dev->core_mutex);
+		break;
+	case VIDIOC_MSM_ISP_UPDATE_FE_FRAME_ID:
+		mutex_lock(&vfe_dev->core_mutex);
+		rc = msm_isp_update_fe_frame_id(vfe_dev, arg);
 		mutex_unlock(&vfe_dev->core_mutex);
 		break;
 	case VIDIOC_MSM_ISP_REG_UPDATE_CMD:

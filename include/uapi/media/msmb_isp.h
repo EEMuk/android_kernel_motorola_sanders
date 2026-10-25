@@ -372,11 +372,18 @@ enum msm_vfe_axi_stream_cmd {
 	STOP_IMMEDIATELY,
 };
 
+enum msm_vfe_hw_state {
+	HW_STATE_NONE,
+	HW_STATE_SLEEP,
+	HW_STATE_AWAKE,
+};
+
 struct msm_vfe_axi_stream_cfg_cmd {
 	uint8_t num_streams;
 	uint32_t stream_handle[VFE_AXI_SRC_MAX];
 	enum msm_vfe_axi_stream_cmd cmd;
 	uint8_t sync_frame_id_src;
+	enum msm_vfe_hw_state hw_state;
 };
 
 enum msm_vfe_axi_stream_update_type {
@@ -431,6 +438,14 @@ struct msm_vfe_axi_halt_cmd {
 struct msm_vfe_axi_reset_cmd {
 	uint32_t blocking;
 	uint32_t frame_id;
+};
+
+struct msm_vfe_update_fe_frame_id {
+	uint32_t frame_id;
+};
+
+struct msm_vfe_restart_fe_cmd {
+	uint32_t restart_fe;
 };
 
 struct msm_vfe_axi_restart_cmd {
@@ -978,13 +993,16 @@ enum msm_isp_ioctl_cmd_code {
 	MSM_ISP_SET_DUAL_HW_MASTER_SLAVE,
 	MSM_ISP_MAP_BUF_START_FE,
 	MSM_ISP_UNMAP_BUF,
-	MSM_ISP_AHB_CLK_CFG,
-	MSM_ISP_DUAL_HW_MASTER_SLAVE_SYNC,
 	MSM_ISP_FETCH_ENG_MULTI_PASS_START,
 	MSM_ISP_MAP_BUF_START_MULTI_PASS_FE,
+	MSM_ISP_CFG_HW_STATE,
+	MSM_ISP_AHB_CLK_CFG,
+	MSM_ISP_UPDATE_FE_FRAME_ID,
+	MSM_ISP_RESTART_FE,
+	MSM_ISP32_REQUEST_STREAM,
+	MSM_ISP_DUAL_HW_MASTER_SLAVE_SYNC,
 	MSM_ISP_REQUEST_BUF_VER2,
 	MSM_ISP_DUAL_HW_LPM_MODE,
-	MSM_ISP32_REQUEST_STREAM,
 };
 
 #define VIDIOC_MSM_VFE_REG_CFG \
@@ -1105,6 +1123,18 @@ enum msm_isp_ioctl_cmd_code {
 #define VIDIOC_MSM_ISP_MAP_BUF_START_MULTI_PASS_FE \
 	_IOWR('V', MSM_ISP_MAP_BUF_START_MULTI_PASS_FE, \
 		struct msm_vfe_fetch_eng_multi_pass_start)
+
+#define VIDIOC_MSM_ISP_CFG_HW_STATE \
+	_IOWR('V', MSM_ISP_CFG_HW_STATE, \
+		struct msm_vfe_axi_stream_cfg_cmd)
+
+#define VIDIOC_MSM_ISP_UPDATE_FE_FRAME_ID \
+	_IOWR('V', MSM_ISP_UPDATE_FE_FRAME_ID, \
+		struct msm_vfe_update_fe_frame_id)
+
+#define VIDIOC_MSM_ISP_RESTART_FE \
+	_IOWR('V', MSM_ISP_RESTART_FE, \
+		struct msm_vfe_restart_fe_cmd)
 
 #define VIDIOC_MSM_ISP_REQUEST_BUF_VER2 \
 	_IOWR('V', MSM_ISP_REQUEST_BUF_VER2, struct msm_isp_buf_request_ver2)
