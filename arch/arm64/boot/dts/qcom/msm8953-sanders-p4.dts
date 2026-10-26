@@ -16,3 +16,16 @@
 	qcom,board-id = <0x4B 0x8400>, <0x4C 0x8400>;
 };
 
+
+/* P4 drives the notification LED from the charger ATC pin, not MPP2 */
+&spmi_bus {
+	qcom,pmi8950@2 {
+		qcom,leds@a100 {
+			status = "disabled";
+		};
+
+		qcom,leds@1000 {
+			status = "okay";
+		};
+	};
+};

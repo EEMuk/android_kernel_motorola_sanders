@@ -28,6 +28,8 @@
 #define LED_CFG_SHIFT   1
 #define LED_ON		0x03
 #define LED_OFF		0x00
+#define LED_BLINK_1	0x01
+#define LED_BLINK_2	0x02
 
 /**
  * @led_classdev - led class device
@@ -39,6 +41,7 @@ struct atc_led_data {
 	struct platform_device *pdev;
 	struct regmap *regmap;
 	u32			addr;
+	u8			blink;
 };
 
 static int
@@ -46,7 +49,6 @@ atc_led_masked_write(struct atc_led_data *led, u16 addr, u8 mask, u8 val)
 {
 	int rc;
 
-        dev_info(&led->pdev->dev,"#led dbg# atc_led_masked_write start, write to addr=%x\n", addr);
 	rc = regmap_update_bits(led->regmap, addr, mask, val);
 	if (rc)
 		dev_err(&led->pdev->dev,
@@ -55,27 +57,70 @@ atc_led_masked_write(struct atc_led_data *led, u16 addr, u8 mask, u8 val)
 	return rc;
 }
 
+static void atc_led_write(struct atc_led_data *led, u8 cfg)
+{
+	atc_led_masked_write(led, led->addr, LED_CFG_MASK,
+			     cfg << LED_CFG_SHIFT);
+}
+
+/*
+ * The ATC pin is either off, on, or blinking in one of two PMIC patterns.
+ * Any non-zero brightness means on, except that it leaves a running
+ * hardware blink alone (the timer trigger sets the blink first, then
+ * the brightness).
+ */
 static void atc_led_set(struct led_classdev *led_cdev,
 				enum led_brightness value)
 {
-	u8 val;
 	struct atc_led_data *led;
 
 	led = container_of(led_cdev, struct atc_led_data, cdev);
 
-	if (value > LED_ON)
-		value = LED_ON;
+	if (value == LED_OFF)
+		led->blink = 0;
+	else if (led->blink)
+		return;
 
-        dev_info(&led->pdev->dev,"#led dbg# atc_led_set start, value=%x\n", value);
+	atc_led_write(led, value ? LED_ON : LED_OFF);
+}
 
-	val = value << LED_CFG_SHIFT;
-	atc_led_masked_write(led, led->addr, LED_CFG_MASK, val);
-	led->cdev.brightness = value;
+/* Blink in hardware, so it keeps blinking while the system is suspended */
+static int atc_led_blink_set(struct led_classdev *led_cdev,
+			     unsigned long *delay_on, unsigned long *delay_off)
+{
+	struct atc_led_data *led;
+
+	led = container_of(led_cdev, struct atc_led_data, cdev);
+
+	if (!*delay_on && !*delay_off) {
+		led->blink = LED_BLINK_1;
+	} else if (!*delay_off) {
+		led->blink = 0;
+		atc_led_write(led, LED_ON);
+		return 0;
+	} else if (!*delay_on) {
+		led->blink = 0;
+		atc_led_write(led, LED_OFF);
+		return 0;
+	} else {
+		led->blink = *delay_on < 500 ? LED_BLINK_2 : LED_BLINK_1;
+	}
+
+	atc_led_write(led, led->blink);
+	led_cdev->brightness = led_cdev->max_brightness;
+	return 0;
 }
 
 static enum led_brightness atc_led_get(struct led_classdev *led_cdev)
 {
-	return led_cdev->brightness;
+	struct atc_led_data *led;
+	unsigned int val;
+
+	led = container_of(led_cdev, struct atc_led_data, cdev);
+	if (regmap_read(led->regmap, led->addr, &val))
+		return led_cdev->brightness;
+
+	return (val & LED_CFG_MASK) ? led_cdev->max_brightness : LED_OFF;
 }
 
 static int atc_leds_probe(struct platform_device *pdev)
@@ -130,7 +175,6 @@ static int atc_leds_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	dev_info(&pdev->dev, "atc_leds_probe, addr=%#x \n", led->addr);
 
 	rc = regmap_read(led->regmap, led->addr, &val_reg);
 	if (rc < 0) {
@@ -141,8 +185,9 @@ static int atc_leds_probe(struct platform_device *pdev)
 	
 	led->cdev.brightness_set = atc_led_set;
 	led->cdev.brightness_get = atc_led_get;
-	led->cdev.brightness = (val_reg & LED_CFG_MASK) >> LED_CFG_SHIFT;
-	led->cdev.max_brightness = LED_ON;
+	led->cdev.blink_set = atc_led_blink_set;
+	led->cdev.max_brightness = 1;
+	led->cdev.brightness = (val_reg & LED_CFG_MASK) ? 1 : 0;
 
 	rc = led_classdev_register(&pdev->dev, &led->cdev);
 	if (rc) {
@@ -151,7 +196,7 @@ static int atc_leds_probe(struct platform_device *pdev)
 	}
 
 	dev_set_drvdata(&pdev->dev, led);
-	dev_info(&pdev->dev, "%s success\n", __func__);
+	dev_info(&pdev->dev, "ATC LED at %#x, ctrl %#x\n", led->addr, val_reg);
 	return 0;
 }
 
