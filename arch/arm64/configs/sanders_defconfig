@@ -751,5 +751,3 @@ CONFIG_PRONTO_WLAN=m
 # CONFIG_MSM_SDE_ROTATOR is not set
 # NFC: NXP PN544 (Motorola driver, /dev/pn544)
 CONFIG_PN544=y
-# TEST ONLY (bring-up): boot progress stripes on the splash framebuffer
-CONFIG_FWDBG_STRIPES=y

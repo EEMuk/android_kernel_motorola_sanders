@@ -14,7 +14,6 @@
 #include "msm-cdc-pinctrl.h"
 #include "wcd9xxx-irq.h"
 #include "core.h"
-#include <linux/fwdbg.h>
 
 #define NUM_DRIVERS_REG_RET 3
 
@@ -23,19 +22,15 @@ static int __init wcd9xxx_core_init(void)
 	int ret[NUM_DRIVERS_REG_RET] = {0};
 	int i = 0;
 
-	fwdbg_point(1);
 	ret[0] = msm_cdc_pinctrl_drv_init();
-	fwdbg_point(2);
 	if (ret[0])
 		pr_err("%s: Failed init pinctrl drv: %d\n", __func__, ret[0]);
 
 	ret[1] = wcd9xxx_irq_drv_init();
-	fwdbg_point(3);
 	if (ret[1])
 		pr_err("%s: Failed init irq drv: %d\n", __func__, ret[1]);
 
 	ret[2] = wcd9xxx_init();
-	fwdbg_point(4);
 	if (ret[2])
 		pr_err("%s: Failed wcd core drv: %d\n", __func__, ret[2]);
 

@@ -8,7 +8,6 @@
  * This function is used through-out the kernel (including mm and fs)
  * to indicate a major problem.
  */
-#include <linux/fwdbg.h>
 #include <linux/debug_locks.h>
 #include <linux/interrupt.h>
 #include <linux/kmsg_dump.h>
@@ -140,15 +139,6 @@ void panic(const char *fmt, ...)
 	int state = 0;
 	int old_cpu, this_cpu;
 	bool _crash_kexec_post_notifiers = crash_kexec_post_notifiers;
-
-#ifdef CONFIG_FWDBG_STRIPES
-	{
-		char pbuf[64];
-		fwdbg_paint(960, 255, 0, 0); /* Bright RED at row 960 for PANIC */
-		snprintf(pbuf, sizeof(pbuf), "PANIC: %s", buf);
-		fwdbg_print(1350, pbuf, 255, 128, 128, 0, 0, 0);
-	}
-#endif
 
 	trace_kernel_panic(0);
 

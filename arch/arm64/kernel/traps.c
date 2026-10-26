@@ -17,7 +17,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <linux/fwdbg.h>
 #include <linux/bug.h>
 #include <linux/signal.h>
 #include <linux/personality.h>
@@ -323,21 +322,6 @@ void die(const char *str, struct pt_regs *regs, int err)
 	enum bug_trap_type bug_type = BUG_TRAP_TYPE_NONE;
 	unsigned long flags = oops_begin();
 	int ret;
-
-#ifdef CONFIG_FWDBG_STRIPES
-	{
-		char buf[64];
-		fwdbg_paint(1000, 255, 0, 255); /* Bright MAGENTA at row 1000 for DIE */
-		snprintf(buf, sizeof(buf), "DIE: %s", str ? str : "fault");
-		fwdbg_print(1350, buf, 255, 255, 255, 0, 0, 0); /* White on black */
-		if (regs) {
-			snprintf(buf, sizeof(buf), "PC: %016lx", (unsigned long)regs->pc);
-			fwdbg_print(1420, buf, 255, 255, 0, 0, 0, 0); /* Yellow on black */
-			snprintf(buf, sizeof(buf), "LR: %016lx", (unsigned long)regs->regs[30]);
-			fwdbg_print(1490, buf, 0, 255, 255, 0, 0, 0); /* Cyan on black */
-		}
-	}
-#endif
 
 	if (!user_mode(regs))
 		bug_type = report_bug(regs->pc, regs);

@@ -219,20 +219,6 @@ efi_header_end:
 	 *  x19/x20    __primary_switch()         callee preserved temp registers
 	 */
 ENTRY(stext)
-#ifdef CONFIG_FWDBG_STRIPES
-	/*
-	 * Bring-up marker: paint a white band (rows 20-44) into the
-	 * bootloader's splash framebuffer before anything else runs. MMU and
-	 * caches are still off; x0-x3 (boot args) are left untouched.
-	 */
-	ldr	x10, =(0x90001000 + 20 * 1080 * 3)
-	ldr	x11, =(25 * 1080 * 3)
-	mov	w12, #0xff
-1:	strb	w12, [x10], #1
-	subs	x11, x11, #1
-	b.ne	1b
-	dsb	sy
-#endif
 	bl	preserve_boot_args
 	bl	el2_setup			// Drop to EL1, w0=cpu_boot_mode
 	adrp	x23, __PHYS_OFFSET

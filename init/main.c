@@ -12,7 +12,6 @@
 #define DEBUG		/* Enable initcall_debug */
 
 #include <linux/types.h>
-#include <linux/fwdbg.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
 #include <linux/kernel.h>
@@ -502,7 +501,6 @@ asmlinkage __visible void __init start_kernel(void)
 	page_address_init();
 	pr_notice("%s", linux_banner);
 	setup_arch(&command_line);
-	fwdbg_paint(60, 0, 255, 0); /* Green at row 60: setup_arch */
 	/*
 	 * Set up the the initial canary ASAP:
 	 */
@@ -539,7 +537,6 @@ asmlinkage __visible void __init start_kernel(void)
 	sort_main_extable();
 	trap_init();
 	mm_init();
-	fwdbg_paint(100, 255, 255, 0); /* Yellow at row 100: mm_init */
 
 	/*
 	 * Set up the scheduler prior starting any interrupts (such as the
@@ -547,7 +544,6 @@ asmlinkage __visible void __init start_kernel(void)
 	 * time - but meanwhile we still have a functioning scheduler.
 	 */
 	sched_init();
-	fwdbg_paint(460, 255, 0, 255); /* Magenta at row 460: sched_init returned */
 	/*
 	 * Disable preemption - early bootup scheduling is extremely
 	 * fragile until we cpu_idle() for the first time.
@@ -575,7 +571,6 @@ asmlinkage __visible void __init start_kernel(void)
 	/* init some links before init_ISA_irqs() */
 	early_irq_init();
 	init_IRQ();
-	fwdbg_paint(500, 0, 255, 255); /* Cyan at row 500: init_IRQ */
 	tick_init();
 	rcu_init_nohz();
 	init_timers();
@@ -583,7 +578,6 @@ asmlinkage __visible void __init start_kernel(void)
 	softirq_init();
 	timekeeping_init();
 	time_init();
-	fwdbg_paint(540, 255, 255, 255); /* White at row 540: time_init */
 
 	/*
 	 * For best initial stack canary entropy, prepare it after:
@@ -603,7 +597,6 @@ asmlinkage __visible void __init start_kernel(void)
 	WARN(!irqs_disabled(), "Interrupts were enabled early\n");
 	early_boot_irqs_disabled = false;
 	local_irq_enable();
-	fwdbg_paint(580, 0, 255, 0); /* Green at row 580: local_irq_enable */
 
 	kmem_cache_init_late();
 
@@ -613,7 +606,6 @@ asmlinkage __visible void __init start_kernel(void)
 	 * this. But we do want output early, in case something goes wrong.
 	 */
 	console_init();
-	fwdbg_paint(620, 255, 255, 0); /* Yellow at row 620: console_init */
 	if (panic_later)
 		panic("Too many boot %s vars at `%s'", panic_later,
 		      panic_param);
@@ -687,7 +679,6 @@ asmlinkage __visible void __init start_kernel(void)
 	ftrace_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
-	fwdbg_paint(660, 255, 128, 0); /* Orange at row 660: rest_init */
 	rest_init();
 
 	prevent_tail_call_optimization();
@@ -796,7 +787,6 @@ static int __init_or_module do_one_initcall_debug(initcall_t fn)
 
 int __init_or_module do_one_initcall(initcall_t fn)
 {
-	fwdbg_initcall();
 	int count = preempt_count();
 	int ret;
 	char msgbuf[64];
@@ -976,7 +966,6 @@ static int __ref kernel_init(void *unused)
 	int ret;
 
 	kernel_init_freeable();
-	fwdbg_paint(700, 0, 255, 255); /* Cyan at row 700: kernel_init_freeable done */
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
 	jump_label_invalidate_initmem();
