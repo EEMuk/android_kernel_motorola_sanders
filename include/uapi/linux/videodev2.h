@@ -2102,10 +2102,17 @@ struct v4l2_mpeg_vbi_fmt_ivtv {
  * @bytesperline:	distance in bytes between the leftmost pixels in two
  *			adjacent lines
  */
+/*
+ * sanders: the vendor video stack (PE11 libOmxVdec/Venc) was built against
+ * the 3.18 layout, where bytesperline is 16 bits and reserved[0] - which
+ * msm_vidc fills with the plane scanlines - sits at byte 6. With the 4.9
+ * layout those blobs read the scanlines as 0 and playback fails.
+ * Same size either way.
+ */
 struct v4l2_plane_pix_format {
 	__u32		sizeimage;
-	__u32		bytesperline;
-	__u16		reserved[6];
+	__u16		bytesperline;
+	__u16		reserved[7];
 } __attribute__ ((packed));
 
 /**
