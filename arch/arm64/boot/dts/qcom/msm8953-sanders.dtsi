@@ -627,6 +627,54 @@
 			};
 		};
 	};
+
+	/*
+	 * Stock Motorola skin limit (thermal-engine SS-MSM-CLUSTER0): above
+	 * 43 C on msm_therm step the CPUs down to 1401.6 MHz (state 4),
+	 * release below 41 C. The 3.18 thermal-engine did this through the
+	 * msm_thermal ioctl, which 4.9 lacks, so the kernel does it here.
+	 * The VADC has no trip interrupt: poll it (step_wise sends no
+	 * uevents). Stock has no skin-based modem PA limit.
+	 */
+	case-therm-step {
+		polling-delay-passive = <2000>;
+		polling-delay = <2000>;
+
+		trips {
+			cpus-trip {
+				hysteresis = <2000>;
+			};
+		};
+
+		cooling-maps {
+			skin_cpu0 {
+				cooling-device = <&CPU0 THERMAL_NO_LIMIT 4>;
+			};
+			skin_cpu1 {
+				cooling-device = <&CPU1 THERMAL_NO_LIMIT 4>;
+			};
+			skin_cpu2 {
+				cooling-device = <&CPU2 THERMAL_NO_LIMIT 4>;
+			};
+			skin_cpu3 {
+				cooling-device = <&CPU3 THERMAL_NO_LIMIT 4>;
+			};
+			skin_cpu4 {
+				cooling-device = <&CPU4 THERMAL_NO_LIMIT 4>;
+			};
+			skin_cpu5 {
+				cooling-device = <&CPU5 THERMAL_NO_LIMIT 4>;
+			};
+			skin_cpu6 {
+				cooling-device = <&CPU6 THERMAL_NO_LIMIT 4>;
+			};
+			skin_cpu7 {
+				cooling-device = <&CPU7 THERMAL_NO_LIMIT 4>;
+			};
+			/delete-node/ modem_lvl1;
+			/delete-node/ modem_lvl2;
+		};
+	};
 };
 
 /* ---------------- Storage ---------------- */
