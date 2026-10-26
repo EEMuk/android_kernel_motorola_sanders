@@ -9924,6 +9924,20 @@ int wlan_hdd_cfg80211_register(struct wiphy *wiphy)
         return -EIO;
     }
 
+    /*
+     * Keep the link up across system suspend, as with the 3.18 cfg80211:
+     * without a WoWLAN config, 4.9's wiphy_suspend() disconnects every
+     * interface first (cfg80211_leave_all). Nothing sets one under Ubuntu
+     * Touch, so default to "any" (the firmware filters while suspended).
+     * cfg80211 frees it on unregister; nl80211 can still replace it.
+     */
+    if (!wiphy->wowlan_config) {
+        wiphy->wowlan_config = kzalloc(sizeof(*wiphy->wowlan_config),
+                                       GFP_KERNEL);
+        if (wiphy->wowlan_config)
+            wiphy->wowlan_config->any = true;
+    }
+
     EXIT();
     return 0;
 }
@@ -23083,6 +23097,9 @@ static int wlan_hdd_cfg80211_testmode(struct wiphy *wiphy,
 #endif /* CONFIG_NL80211_TESTMODE */
 
 extern void hdd_set_wlan_suspend_mode(bool suspend);
+
+/* the driver suspend mode was entered for a system suspend (not SoftAP) */
+static bool wlan_hdd_sys_suspended;
 static int __wlan_hdd_cfg80211_dump_survey(struct wiphy *wiphy,
                                          struct net_device *dev,
                                          int idx, struct survey_info *survey)
@@ -23235,6 +23252,9 @@ int __wlan_hdd_cfg80211_resume_wlan(struct wiphy *wiphy)
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                   "%s: Resume SoftAP", __func__);
            hdd_set_wlan_suspend_mode(false);
+    } else if (wlan_hdd_sys_suspended) {
+        hdd_set_wlan_suspend_mode(false);
+        wlan_hdd_sys_suspended = false;
     }
 
     spin_lock(&pHddCtx->schedScan_lock);
@@ -23325,6 +23345,15 @@ int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                   "%s: Suspend SoftAP", __func__);
          hdd_set_wlan_suspend_mode(true);
+    } else if (!wlan_hdd_sys_suspended) {
+        /*
+         * Nothing on Ubuntu Touch sends the Android SETSUSPENDMODE driver
+         * command at screen off, so enter the driver's suspend mode (packet
+         * filters, power save) here; without it the platform suspend
+         * callback refuses system suspend (not in IMPS/BMPS).
+         */
+        hdd_set_wlan_suspend_mode(true);
+        wlan_hdd_sys_suspended = true;
     }
 
 
