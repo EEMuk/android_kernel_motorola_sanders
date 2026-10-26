@@ -452,7 +452,8 @@ static int32_t msm_gpio_flash_low(
 
 	if (power_info->gpio_conf->gpio_num_info->valid[0]) {
 		int gpio_en = power_info->gpio_conf->gpio_num_info->gpio_num[0];
-		gpio_set_value(gpio_en, GPIO_OUT_HIGH);
+		/* gpio13 is left as an input on 4.9: set the direction here */
+		gpio_direction_output(gpio_en, GPIO_OUT_HIGH);
 		udelay(1);
 		for (i = 0; i <= 14; i++) {
 			gpio_set_value(gpio_en, GPIO_OUT_LOW);
@@ -462,7 +463,7 @@ static int32_t msm_gpio_flash_low(
 		}
 	}
 	if (power_info->gpio_conf->gpio_num_info->valid[1]) {
-		gpio_set_value(
+		gpio_direction_output(
 			power_info->gpio_conf->gpio_num_info->gpio_num[1],
 			GPIO_OUT_LOW);
 	}
@@ -483,7 +484,8 @@ static int32_t msm_gpio_flash_high(
 
 	if (power_info->gpio_conf->gpio_num_info->valid[0]) {
 		int gpio_en = power_info->gpio_conf->gpio_num_info->gpio_num[0];
-		gpio_set_value(gpio_en, GPIO_OUT_HIGH);
+		/* gpio13 is left as an input on 4.9: set the direction here */
+		gpio_direction_output(gpio_en, GPIO_OUT_HIGH);
 		udelay(1);
 		for (i = 0; i <= 10; i++) {
 			gpio_set_value(gpio_en, GPIO_OUT_LOW);
@@ -493,7 +495,7 @@ static int32_t msm_gpio_flash_high(
 		}
 	}
 	if (power_info->gpio_conf->gpio_num_info->valid[1]) {
-		gpio_set_value(
+		gpio_direction_output(
 			power_info->gpio_conf->gpio_num_info->gpio_num[1],
 			GPIO_OUT_HIGH);
 	}

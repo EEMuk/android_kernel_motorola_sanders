@@ -43,6 +43,13 @@
 		qcom,gpio-req-tbl-flags = <0 0>;
 		qcom,gpio-req-tbl-label = "FLASH_EN",
 			"FLASH_NOW";
+		/*
+		 * Nothing else muxes these pins as GPIO on 4.9 (3.18 got gpio40
+		 * from the rear sensor's pin state), and the driver only
+		 * toggles them, so without this the front flash stays dark.
+		 */
+		pinctrl-names = "default";
+		pinctrl-0 = <&cam_front_flash_default>;
 	};
 };
 
@@ -323,6 +330,21 @@
 };
 
 &tlmm {
+	cam_front_flash_default: cam_front_flash_default {
+		/* FLASH_EN (pulse-count brightness), FLASH_NOW (strobe) */
+		mux {
+			pins = "gpio13", "gpio40";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio13", "gpio40";
+			bias-disable;
+			drive-strength = <2>;
+			output-low;
+		};
+	};
+
 	cam_sensor_rear0_default: cam_sensor_rear0_default {
 		/* RESET0, VANA0 */
 		mux {
