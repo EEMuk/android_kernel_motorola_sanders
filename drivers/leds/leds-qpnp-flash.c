@@ -1216,6 +1216,8 @@ static int qpnp_flash_led_prepare_v1(struct led_trigger *trig, int options,
 	int rc;
 
 	if (!led_cdev) {
+		if (options & DISABLE_REGULATOR)
+			return 0;
 		pr_err("Invalid led_trigger provided\n");
 		return -EINVAL;
 	}
@@ -2556,6 +2558,7 @@ static int qpnp_flash_led_probe(struct platform_device *pdev)
 					"Unable to read max current\n");
 			return rc;
 		}
+		led->flash_node[i].cdev.flags |= LED_KEEP_TRIGGER;
 		rc = led_classdev_register(&pdev->dev,
 						&led->flash_node[i].cdev);
 		if (rc) {
